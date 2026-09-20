@@ -15,6 +15,7 @@ import {
   Briefcase, GraduationCap, Award, MapPin, Clock, ChevronLeft, ChevronRight,
   X, Trophy,
 } from "lucide-react";
+import { UnavailablePhoto } from "./unavailable-photo";
 import type { Achievement } from "@/lib/undimension/data";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 
@@ -370,11 +371,17 @@ function MemberPortfolio({ member }: { member: Member }) {
             <div className="flex flex-col md:flex-row gap-6 items-start">
               {/* Big Photo */}
               <div className="border-8 border-black bg-black p-2 shadow-[12px_12px_0_#000] flex-shrink-0 w-full md:w-64 lg:w-72 relative">
-                <img
-                  src={member.img}
-                  alt={member.nick}
-                  className="w-full aspect-[4/5] object-cover"
-                />
+                {member.img ? (
+                  <img
+                    src={member.img}
+                    alt={member.nick}
+                    className="w-full aspect-[4/5] object-cover"
+                  />
+                ) : (
+                  <div className="w-full aspect-[4/5]">
+                    <UnavailablePhoto label={`NO PHOTO — ${member.nick.toUpperCase()}`} />
+                  </div>
+                )}
                 <div className="absolute inset-2 ud-scanlines opacity-30 pointer-events-none" />
                 {/* Nick sticker */}
                 <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-[#ffea00] border-4 border-black px-6 py-1.5 font-mono-ud font-black text-black text-2xl shadow-[4px_4px_0_#000] -rotate-2 whitespace-nowrap">

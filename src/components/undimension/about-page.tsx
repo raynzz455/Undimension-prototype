@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { StarField } from "./star-field";
 import { StarGraphic, Marquee } from "./primitives";
 import { MemberDetailModal } from "./member-detail-modal";
+import { UnavailablePhoto } from "./unavailable-photo";
 import { GuestbookSection } from "./guestbook-section";
 import { TimelineSection } from "./timeline-section";
 import { QuoteWidget } from "./quote-widget";
@@ -129,12 +130,18 @@ function MemberCard({ m, i, onOpen }: { m: Member; i: number; onOpen: () => void
         >
           <div className="border-8 border-black dark:border-white bg-black p-3 shadow-[16px_16px_0_#000] dark:shadow-[16px_16px_0_#fff] relative">
             <div className="relative overflow-hidden group-hover:scale-[1.02] transition-transform duration-300 ease-out cursor-pointer" onClick={onOpen} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}>
-              <img
-                src={m.img}
-                alt={m.nick}
-                className="w-full aspect-[4/5] md:aspect-[9/16] object-cover grayscale contrast-[1.4] group-hover:grayscale-0 transition-all duration-300 ud-wobble-hover"
-                loading="lazy"
-              />
+              {m.img ? (
+                <img
+                  src={m.img}
+                  alt={m.nick}
+                  className="w-full aspect-[4/5] md:aspect-[9/16] object-cover grayscale contrast-[1.4] group-hover:grayscale-0 transition-all duration-300 ud-wobble-hover"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="w-full aspect-[4/5] md:aspect-[9/16]">
+                  <UnavailablePhoto label={`NO PHOTO — ${m.nick.toUpperCase()}`} />
+                </div>
+              )}
               <div className="absolute inset-0 ud-scanlines pointer-events-none" />
             </div>
             {/* Tape Sticker — smaller on mobile to avoid clipping */}

@@ -69,7 +69,7 @@ export function OpeningScreen({ onEnter }: { onEnter: () => void }) {
         >
           UNDIMENSION
         </h1>
-        <Tesseract image="/members/opening.webp" onEnter={onEnter} />
+        <Tesseract image="/assets/Astronout.png" onEnter={onEnter} />
         <p className="font-outfit text-lg md:text-2xl font-black border-4 border-white bg-[#ff4d4d] text-white px-8 py-4 shadow-[8px_8px_0_#fff] max-w-xl -rotate-2 uppercase relative z-10 hover:rotate-0 hover:scale-105 transition-all no-color-transition animate-intro-fade">
           Initiate launch sequence to the collective.
         </p>

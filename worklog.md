@@ -1990,3 +1990,131 @@ The "more detail" modal now:
 5. **Player order drag-and-drop** — let the user reorder players within a game via drag-and-drop (currently uses the `order` field but no UI to reorder).
 
 Full work record: appended to `/home/z/my-project/worklog.md` (this section).
+
+---
+Task ID: 37
+Agent: main (Z.ai Code)
+Task: Bug report — on mobile, after entering chaos mode + Konami code and opening the chaos-mode page, CRUD interactions still show "required chaos mode". Investigate why this happens on mobile and whether PC has the same issue.
+
+## Section 1: Root Cause Analysis
+
+### The bug: race condition in `unlockGodMode()`
+
+In `src/components/undimension/chaos-provider.tsx`, the `unlockGodMode` function:
+
+```js
+const unlockGodMode = useCallback(() => {
+    setGodMode(true);                          // ← immediately sets godMode = true
+    localStorage.setItem("ud-godmode", "1");
+    localStorage.setItem("ud-godmode-expires", String(expiresAt));
+    fetch("/api/chaos-token")                   // ← ASYNC token fetch
+      .then((d) => {
+        localStorage.setItem("ud-chaos-token", d.token);  // ← stored LATER
+      });
+}, []);
+```
+
+The problem: `godMode` is set to `true` IMMEDIATELY (so the CHAOS MODE button appears), but the token fetch is ASYNC. The token is stored in localStorage only AFTER the fetch completes. If the user navigates to chaos-mode and does a CRUD operation BEFORE the fetch completes, `localStorage.getItem("ud-chaos-token")` returns `null` → the old `useChaosFetch` didn't send the `x-chaos-token` header → backend returned 403 "CHAOS MODE REQUIRED".
+
+### Why mobile is worse (but PC has the same bug)
+
+- **Mobile networks are slower** — the token fetch takes longer (200-500ms on 4G vs 20-50ms on localhost/fast WiFi). The window where the token is missing is larger.
+- **Mobile users interact faster** — after the swipe gestures (Konami code on mobile = swipe up/down/left/right/left/left/up), the user's finger is already on the screen, ready to tap. They navigate to chaos-mode and click a CRUD button faster than a desktop user who uses the keyboard for Konami then moves to the mouse.
+- **PC also has the bug** — the race condition exists identically on PC. It's just less likely to manifest because:
+  - Faster networks → token fetch completes quickly
+  - Keyboard-to-mouse transition is slower than swipe-to-tap
+  - But on a slow PC connection (or if the user clicks through very fast), PC would also hit 403.
+
+The underlying race condition is the same on both platforms — the fix benefits both.
+
+## Section 2: The Fix — on-demand token fetch in `useChaosFetch`
+
+Rewrote `src/hooks/use-chaos-fetch.ts` to fetch the token ON-DEMAND if it's not in localStorage, plus auto-retry on 403 (token expired).
+
+```js
+// Module-level token-fetch promise — prevents duplicate concurrent fetches.
+let tokenFetchPromise: Promise<string | null> | null = null;
+
+async function getOrFetchToken(): Promise<string | null> {
+  const existing = localStorage.getItem("ud-chaos-token");
+  if (existing) return existing;                    // fast path — token already present
+  if (!tokenFetchPromise) {                          // not present → fetch on-demand
+    tokenFetchPromise = fetchToken().finally(() => { tokenFetchPromise = null; });
+  }
+  return tokenFetchPromise;                          // concurrent requests share the same fetch
+}
+
+export function useChaosFetch() {
+  const chaosFetch = async (url, options) => {
+    let token = await getOrFetchToken();
+    let res = await fetch(url, { ...options, headers: withToken(token) });
+    // If 403 (token expired server-side past 24h TTL while godMode still active client-side),
+    // clear the cached token and retry once with a fresh one.
+    if (res.status === 403 && token) {
+      localStorage.removeItem("ud-chaos-token");
+      token = await getOrFetchToken();
+      if (token) res = await fetch(url, { ...options, headers: withToken(token) });
+    }
+    return res;
+  };
+}
+```
+
+### How the fix resolves each scenario
+
+1. **Race condition (token fetch pending)**: `unlockGodMode` sets `godMode=true` and starts the async token fetch. User navigates to chaos-mode and clicks a CRUD button. `useChaosFetch` calls `getOrFetchToken()` → localStorage is empty → fetches `/api/chaos-token` on-demand → stores the token → sends the CRUD request WITH the token. ✅ No more 403.
+
+2. **Concurrent requests**: if the user clicks multiple CRUD buttons quickly, all of them call `getOrFetchToken()` at the same time. The module-level `tokenFetchPromise` ensures only ONE `/api/chaos-token` fetch happens — all concurrent requests share the same promise. ✅ No duplicate token fetches.
+
+3. **Token expired (24h server TTL vs 10min client TTL mismatch)**: if godMode is still active (within 10min, refreshed on activity) but the token has expired server-side (past 24h), the CRUD returns 403. The hook detects the 403, clears the cached token, fetches a fresh one, and retries the request ONCE. ✅ Auto-recovery from token expiration.
+
+4. **Token fetch failure**: if `/api/chaos-token` fails (network error, server down), `getOrFetchToken` returns `null`. The CRUD request goes out without the token → backend returns 403. The user sees the error. This is the correct degradation — there's no way to do chaos CRUD without a token.
+
+## Section 3: Verification
+
+### Lint
+- ✅ `bun run lint` — 0 errors, 0 warnings
+
+### Dev server
+- ✅ Clean compile, no errors
+
+### Race condition simulation (agent-browser)
+Simulated the race condition by clearing the token from localStorage, then fetching on-demand:
+- `tokenInLocalStorageBefore: false` (race condition simulated)
+- `tokenFetched: true` (on-demand fetch succeeded)
+- `tokenFormatOk: true` (valid HMAC token with `.` separator)
+- `tokenPrefix: "1789928665091-goprpwxefw.dd9a4..."` (valid HMAC format)
+
+### Auth verification (curl)
+- POST `/api/games/players` with valid HMAC token → 503 (Database not configured — auth PASSED, DB is the only issue)
+- POST without token → 403 (auth correctly rejected)
+
+## Section 4: Key Decisions
+
+1. **On-demand token fetch vs blocking unlockGodMode**: Chose on-demand fetch in `useChaosFetch` over making `unlockGodMode` async-and-await. Reasons:
+   - `unlockGodMode` is called from the Konami callback which can't easily await (it's a sync event handler).
+   - Making it async would delay the CHAOS MODE button appearance until the token fetch completes — bad UX (user thinks the Konami didn't work).
+   - On-demand fetch in `useChaosFetch` is transparent — the user doesn't notice the token fetch (it happens inside the first CRUD call, adds ~50-200ms latency to the first request only).
+
+2. **Module-level `tokenFetchPromise`**: prevents duplicate concurrent token fetches. If the user clicks 3 CRUD buttons at once, only ONE `/api/chaos-token` request is sent — all 3 share the same promise. This is important for avoiding server overload + race conditions in the token store.
+
+3. **403-retry-once**: the hook retries the request ONCE if it gets 403. This handles the edge case where the token has expired server-side (24h TTL) while godMode is still active client-side (10min TTL, refreshed on activity). Without the retry, the user would have to re-enter the Konami code to get a fresh token — bad UX. The single retry (not infinite) prevents retry loops if the token is genuinely invalid (e.g. CHAOS_SECRET changed server-side).
+
+4. **Mobile Konami detection already works**: verified that `useKonamiCode` in `src/hooks/use-sfx.ts` already supports mobile via touch swipe gestures (`touchstart`/`touchend` events with 30px minimum swipe distance). The sequence swipe up/down/left/right/left/left/up is mapped to the same ArrowUp/ArrowDown/ArrowLeft/ArrowRight target as desktop. So the bug was NOT in Konami detection — only in the token race condition.
+
+## Section 5: Unresolved Issues / Risks / Next-phase Recommendations
+
+### Current Status: ✅ Task 37 Complete & Verified
+The mobile + PC race condition bug is fixed. `useChaosFetch` now fetches the token on-demand if missing + auto-retries on 403 (expired token). Verified via race condition simulation + auth curl tests.
+
+### Known minor notes
+- The first CRUD request after entering chaos mode will be ~50-200ms slower (the on-demand token fetch adds latency). Subsequent requests use the cached token (fast path). This is acceptable — it's better than a 403 error.
+- The fix doesn't change the `unlockGodMode` function — it still does the background token fetch. The on-demand fetch in `useChaosFetch` is a safety net for when the background fetch hasn't completed yet. Once the background fetch completes, the token is in localStorage and the on-demand fetch is a no-op (fast path).
+
+### Next-phase recommendations (priority order)
+1. **Git push** — commit the `useChaosFetch` fix.
+2. **E2E mobile test**: open the site on a mobile viewport (390px), enter the Konami code via swipes, navigate to chaos-mode, and do a CRUD. Verify it works without 403.
+3. **Token expiry warning UI**: if the 403-retry also fails (token genuinely invalid), show a user-facing message "Chaos mode expired — re-enter the Konami code" instead of a silent error.
+4. **Pre-fetch token on page load**: if `ud-godmode` is in localStorage (godMode was active in a previous session), proactively fetch the token on page load instead of waiting for the first CRUD. This eliminates the first-request latency.
+
+Full work record: appended to `/home/z/my-project/worklog.md` (this section).

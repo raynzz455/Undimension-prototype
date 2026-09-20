@@ -10,6 +10,7 @@ import { useScrollReveal } from "@/hooks/use-scroll-reveal";
 import { useSfx } from "@/hooks/use-sfx";
 import { useFetch } from "@/hooks/use-fetch";
 import { cn } from "@/lib/utils";
+import { UnavailablePhoto } from "./unavailable-photo";
 import {
   Maximize2, RefreshCw, ImageOff, Dices,
   ChevronLeft, ChevronRight, Play, Pause,
@@ -31,12 +32,22 @@ function GalleryCard({ p, onOpen }: { p: GalleryPhoto; onOpen: () => void }) {
       onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}
     >
       <div className="border-4 border-black dark:border-white bg-black overflow-hidden mb-3 relative">
-        <img
-          src={p.img}
-          alt={p.title}
-          className="w-full h-auto grayscale hover:grayscale-0 contrast-125 transition-all duration-300 opacity-90 hover:opacity-100"
-          loading="lazy"
-        />
+        {p.img ? (
+          <img
+            src={p.img}
+            alt={p.title}
+            className="w-full h-auto grayscale hover:grayscale-0 contrast-125 transition-all duration-300 opacity-90 hover:opacity-100"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-full aspect-[4/3]">
+            <UnavailablePhoto
+              label={`NO PHOTO — ${p.author}`}
+              nick={p.author}
+              color="#ff8c00"
+            />
+          </div>
+        )}
         <div className="absolute inset-0 ud-scanlines opacity-30 pointer-events-none" />
         <div className="absolute top-2 right-2 bg-[#d4ff00] border-2 border-black p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <Maximize2 className="w-4 h-4 text-black" />

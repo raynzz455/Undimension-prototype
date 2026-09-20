@@ -447,7 +447,7 @@ export type GalleryPhoto = {
 export const GALLERY_PHOTOS: GalleryPhoto[] = [
   {
     id: "g1",
-    img: "/members/opening.webp",
+    img: "",
     title: "VISI AWAL",
     date: "2020",
     rotate: "-rotate-2",

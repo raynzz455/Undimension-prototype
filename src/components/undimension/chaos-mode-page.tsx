@@ -257,7 +257,7 @@ function MembersTab() {
                   finally { setUploadingPhoto(false); }
                 }} className="block w-full text-xs font-mono-ud text-white file:mr-3 file:py-2 file:px-4 file:border-2 file:border-[#d4ff00] file:bg-[#d4ff00] file:text-black file:font-bold file:cursor-pointer file:hover:bg-[#ff00ff] file:hover:text-white" />
               </label>
-              <input value={img} onChange={(e) => setImg(e.target.value.slice(0, 500))} placeholder="/members/opening.webp (atau paste URL)" className="block w-full px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" />
+              <input value={img} onChange={(e) => setImg(e.target.value.slice(0, 500))} placeholder="/members/member-xxx.webp (atau paste URL gambar)" className="block w-full px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" />
             </div>
           </label>
         </div>

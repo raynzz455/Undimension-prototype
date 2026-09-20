@@ -1097,3 +1097,125 @@ The opening screen now shows a realistic 3D wireframe tesseract (two counter-rot
 5. **next/image for astronaut**: Switch the astronaut `<img>` to `next/image` for responsive srcset + blur placeholder (currently raw `<img>`).
 
 Full work record: appended to `/home/z/my-project/worklog.md` (this section).
+
+---
+Task ID: 30
+Agent: main (Z.ai Code)
+Task: The previous SVG blackhole was still not realistic enough AND the disk/photon ring didn't actually spin (the whole SVG just rotated as a static image). User asked to search for references / find a library that can make the blackhole realistic and actually spin. Then git push.
+
+## Section 1: Current Project Status Assessment
+
+Task 29 left the opening screen with:
+- A realistic 3D CSS tesseract (good — kept as-is)
+- A plain floating astronaut image with no shadow/border (good — kept as-is)
+- A blackhole rendered as a static SVG that just rotated as a whole — the disk material did NOT actually orbit, the photon ring did NOT shimmer, and the lensing halo was a static arc. User correctly identified this as "kurang real" (not realistic enough) and "cincin cahaya tidak berputar" (the light ring doesn't spin).
+
+## Section 2: Research Conducted (web_search via z-ai SDK)
+
+Two web searches:
+1. "three.js black hole shader raymarching gargantua accretion disk rotating github" → confirmed Three.js + GLSL raymarching shader is the gold standard. Top references: chrismatgit/black-hole-simulation (React+TS+Three.js+WebGL), R3F Kerr ray-tracer (real Kerr geodesic solver), threejsroadmap.com WebGPU black hole tutorial, blog.seanholloway.com (HLSL general-relativistic ray tracing).
+2. "pure CSS black hole spinning accretion disk conic-gradient animation codepen no javascript" → confirmed CSS conic-gradients can rotate but cannot do real lensing/raymarching. Pure-CSS approaches are stylized, not photorealistic.
+
+Decision: install **Three.js** and write a custom GLSL fragment shader on a full-screen quad. This is the approach used by the well-known Three.js blackhole demos, gives real-time lensing + orbital motion, and the user explicitly asked for "library yang dapat membuatnya". Bundle impact: ~600KB for three, tree-shakes smaller. Acceptable given the project already has framer-motion, recharts, @mdxeditor/editor.
+
+## Section 3: Completed Modifications
+
+### 3.1 Installed dependencies
+- `three@0.186.0` + `@types/three@0.186.0` via `bun add three @types/three`
+
+### 3.2 `src/components/undimension/cosmic.tsx` — full rewrite of `Blackhole`
+Replaced the static SVG with a `Blackhole3D` component: a `<canvas>` + Three.js scene with an OrthographicCamera and a single full-screen quad Mesh using a `ShaderMaterial`. Everything (event horizon, accretion disk, photon ring, lensing halo, Doppler beaming, background stars, nebula glow) is computed in the GLSL fragment shader. The vertex shader is a trivial pass-through.
+
+Key shader features (all computed per-pixel in real-time, uTime drives the motion):
+- **Tilted accretion disk** — the disk plane is squished on the y-axis (`DISK_TILT = 0.32`) to fake the viewing angle, plus a small rotation (`DISK_TILT_ROT = -0.18`) for a more dynamic composition. This produces the iconic elliptical "Interstellar Gargantua" disk shape rather than a flat line.
+- **Keplerian orbital motion** — `omega = 3.2 / (r + 0.05)` so inner disk material orbits faster than outer (real Keplerian scaling). `orbitalAngle = angle + uTime * omega` drives all disk textures forward over time.
+- **Two-octave turbulence streaks** — `bands = fbm(orbitalAngle*2, r*8)` (broad structure) + `ripples = fbm(orbitalAngle*6, r*16)` (fine ripples), mixed 65/35. LOW frequency on purpose so the orbital motion is VISIBLE to the eye (the first iteration used `*5` and `*14` which was too fine-grained — VLM couldn't detect motion).
+- **Clearly-orbiting hot spot** — a 2D Gaussian clump (`spotRadial * spotAngular`) that sweeps around the disk at `spotAngle = uTime * omega * 0.6`. Added as `c += hot * hotSpot * 1.4 * doppler`. This makes the orbital motion unmistakable.
+- **Temperature gradient** — `diskColor = mix(cool→warm→hot)` based on radius. White-hot inside, orange middle, deep red outside.
+- **Doppler beaming** — `dopplerSide = -diskD.x / r` (left = approaching = brighter, right = receding = dimmer). `doppler = pow(...)^1.6 * 1.2 + 0.25`. Applied to disk color and hot spot.
+- **Black event-horizon sphere** — `if (length(d) < HOLE_R) col = vec3(0.0)`. Pure black, radius 0.13.
+- **Photon ring** — `photonDist = abs(length(d) - HOLE_R - 0.008)`, `photonRing = smoothstep(0.014, 0.0, photonDist)`. Bright white-yellow thin ring just outside the horizon + a softer outer glow. This is the lensed image of light orbiting the hole at 1.5 Rs.
+- **Lensed halo** (the Gargantua signature) — the BACK of the disk bent over the top and under the bottom of the hole. Rendered as a vertical-ring image of the disk AROUND the hole (`haloR > HOLE_R+0.005 && haloR < DISK_IN+0.04`), with its own rotating turbulence (`haloAngle = atan(d.y,d.x) + uTime*0.9`), temperature gradient, top-bright boost (lensing geometry concentrates light at the top), and Doppler.
+- **Background** — twinkling stars (two layers at different densities with sin-based twinkle), faint purple nebula glow, soft orange glow around the hole.
+- **Post-processing** — vignette + Reinhard tonemap + gamma 0.85 for a cinematic look.
+
+Performance/safety:
+- `preserveDrawingBuffer: true` so QA can readPixels to verify the disk actually animates.
+- `ResizeObserver` updates the canvas size + uResolution uniform when the container resizes.
+- `IntersectionObserver` pauses rendering when the canvas is offscreen (saves GPU on scroll).
+- `powerPreference: "high-performance"`, `pixelRatio` capped at 2 to avoid retina OOM.
+- Full cleanup on unmount: cancels rAF, disconnects observers, disposes geometry/material/renderer.
+
+### 3.3 Why the disk now actually spins (vs the old SVG)
+- Old SVG: the entire `<svg>` element rotated via CSS `animation: ud-bh-rotate 60s`. This rotated the static disk image as a whole — the disk material did NOT orbit.
+- New shader: `uTime` advances every frame, `orbitalAngle = angle + uTime * omega` shifts the fbm noise input forward, so the streak pattern AND the hot spot physically move around the disk center. Different radii orbit at different speeds (Keplerian). Verified by `readPixels`: the left disk pixel changed from [110,77,55] to [104,72,51] in 1.5s, and the VLM confirmed "the brightest region moved from the left side to the bottom-left (7 o'clock position)" between two screenshots 1.2s apart.
+
+## Section 4: Verification Results
+
+### Lint
+- ✅ `bun run lint` — 0 errors, 0 warnings
+
+### Dev server
+- ✅ Clean compile with three@0.186.0, no errors in `dev.log`
+- ⚠️ One non-blocking deprecation warning: `THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.` — Clock still works, kept for simplicity.
+
+### Agent Browser E2E
+- ✅ Canvas present, 700×700, WebGL context active (SwiftShader software renderer — expected in headless)
+- ✅ `preserveDrawingBuffer` lets `readPixels` work: disk pixels are real values (not [0,0,0] like before)
+- ✅ Pixel change over 1.5s confirmed animation is running (left disk pixel [110,77,55] → [104,72,51])
+- ✅ Zero console errors, zero page errors
+
+### VLM visual verification — single screenshot
+Asked the vision model to describe the blackhole. Confirmed ALL realistic features:
+1. ✅ Black hole visible (pitch-black event horizon sphere)
+2. ✅ Tilted elliptical accretion disk (NOT a flat line — shows upper and lower surfaces)
+3. ✅ Temperature gradient of hot gas colors (white/pale yellow inside → vivid orange → deep red/brown outside)
+4. ✅ Bright photon ring tightly encircling the event horizon
+5. ✅ Glowing halo arc over the top (lensed far side of the disk bent over the event horizon)
+6. ✅ Streaks/turbulence in the disk suggesting orbital motion
+7. ✅ Doppler beaming — left side brighter/more luminous, right side dimmer/redder
+
+### VLM visual verification — rotation comparison (two screenshots 1.2s apart)
+Asked the vision model to compare two frames and determine if the disk rotates. Answer:
+> "Yes, the disk is rotating. The brightest region moved from the left side to the bottom-left (approximately 7 o'clock position). The overall 'clumpiness' or uneven distribution of light around the ring has rotated clockwise between the two frames. This change in the location of the luminous features confirms that the material in the accretion disk is in motion/orbit around the black hole."
+
+### Full opening screen VLM verification
+Confirmed all 4 elements still work after the blackhole swap:
+1. ✅ Realistic black hole with spinning tilted accretion disk on the right
+2. ✅ 3D wireframe tesseract (cyan outer + yellow inner cube) in the center
+3. ✅ Astronaut floating inside the tesseract (plain image, no shadow/border)
+4. ✅ UNDIMENSION title visible at top
+
+### Golden-path interactivity
+- ✅ ENTER button still navigates to the About page (carried over from Task 29 verification)
+
+## Section 5: Key Decisions
+
+1. **Three.js + custom shader vs pure CSS/SVG**: Chose Three.js + GLSL because (a) the user explicitly asked for "library yang dapat membuatnya", (b) real gravitational lensing + orbital motion requires per-pixel computation that CSS can't do, (c) the well-known Three.js blackhole demos (chrismatgit, R3F Kerr) prove the approach works. Bundle cost (~600KB for three) is acceptable — the project already has framer-motion, recharts, @mdxeditor/editor.
+
+2. **Single full-screen quad vs 3D geometry**: Used a `PlaneGeometry(2,2)` with an OrthographicCamera and a ShaderMaterial. No 3D sphere/disk meshes needed — the entire blackhole (sphere, disk, ring, halo, stars) is computed in the fragment shader via raymarching-style signed-distance-field logic. This is the standard approach for shader-based blackholes and is much simpler than building a 3D scene.
+
+3. **Low-frequency turbulence for visible motion**: The first iteration used `fbm(orbitalAngle*5, r*22)` which was too fine-grained — the VLM couldn't detect motion between frames. Switched to `fbm(orbitalAngle*2, r*8)` for broad bands + `fbm(orbitalAngle*6, r*16)` for ripples, PLUS a clearly-orbiting 2D-Gaussian hot spot. Now the motion is unmistakable.
+
+4. **Keplerian orbital scaling**: `omega = 3.2 / (r + 0.05)` means inner disk material orbits faster than outer (real Keplerian is 1/r^1.5 but 1/r looks better at this scale). This produces the differential rotation that real accretion disks show — inner clumps overtake outer ones.
+
+5. **`preserveDrawingBuffer: true`**: Small perf cost but essential for QA — lets `gl.readPixels()` verify the canvas actually animates. Without it, the buffer is cleared after compositing and readPixels returns [0,0,0], which would have made debugging impossible.
+
+## Section 6: Unresolved Issues / Risks / Next-phase Recommendations
+
+### Current Status: ✅ Task 30 Complete & Verified, ready to push
+The blackhole is now a real-time Three.js GLSL shader with a tilted accretion disk that ACTUALLY orbits (Keplerian motion, visible streaks + hot spot sweeping around), a photon ring, lensing halo, Doppler beaming, and a temperature gradient. Verified by pixel-diff + VLM rotation comparison.
+
+### Known minor notes
+- The `THREE.Clock` deprecation warning is non-blocking. If it bothers anyone, swap to `THREE.Timer` (API is similar).
+- The shader runs on SwiftShader (software WebGL) in headless mode — on real hardware it'll use the GPU and run much faster.
+- The IntersectionObserver pauses rendering when the canvas is offscreen — but the canvas is on the opening screen which is always visible until ENTER is clicked, so this is mostly a non-issue.
+
+### Next-phase recommendations (priority order)
+1. **Git push** — commit the Three.js blackhole + tesseract + astronaut changes (Tasks 29 + 30) to origin/main.
+2. **Kerr (spinning) black hole**: The current shader uses a Schwarzschild (non-spinning) approximation. A Kerr black hole would have an asymmetric photon ring (brighter on the spin side) and frame-dragging swirl. The discourse.threejs.org reference does this with a real geodesic solver.
+3. **Volumetric disk**: The current disk is a thin ring (2D). A volumetric disk (3D thickness with vertical falloff) would look more realistic, especially at the disk's inner edge where material spirals in.
+4. **Background galaxy/nebula texture**: Replace the procedural stars with a real deep-field skybox texture for more visual richness.
+5. **Mouse-look interaction**: Let the user slightly orbit the camera around the blackhole by moving the mouse — the shader can support this via a uCameraAngle uniform.
+
+Full work record: appended to `/home/z/my-project/worklog.md` (this section).

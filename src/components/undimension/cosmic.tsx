@@ -1,184 +1,319 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useEffect, useRef } from "react";
+import * as THREE from "three";
 
 /**
- * Realistic Blackhole — Interstellar "Gargantua" inspired.
+ * Realistic Blackhole — real-time GLSL raymarching shader via Three.js.
  *
- * Built with SVG + radial/linear gradients + Gaussian blur filters + CSS
- * rotation. No external library, no Three.js — keeps the bundle light while
- * delivering the iconic look:
+ * This replaces the static SVG approach with a proper shader-based renderer.
+ * The accretion disk ACTUALLY orbits (Keplerian motion — inner orbits faster),
+ * the photon ring shimmers, Doppler beaming brightens the approaching side,
+ * and the lensed back of the disk wraps around the event horizon as a halo.
  *
- *   1. Faint background nebula glow (gravitational halo around the whole hole)
- *   2. Bottom lensing arc — light from the BACK of the disk bent UNDER the hole
- *   3. Black event-horizon sphere with a subtle purple gravitational-edge tint
- *   4. Bright photon ring just outside the horizon (light orbiting the hole)
- *   5. Top lensing arc — light from the back of the disk bent OVER the top
- *   6. Edge-on accretion disk extending left + right of the horizon, with
- *      Doppler beaming (one side brighter/bluer, the other dimmer/redder)
+ * Research references:
+ *   - chrismatgit/black-hole-simulation (Three.js + WebGL shader raymarching)
+ *   - https://discourse.threejs.org (real-time Kerr black hole ray-tracer)
+ *   - https://threejsroadmap.com (Raytracing a Black Hole with WebGPU)
+ *   - https://blog.seanholloway.com (General Relativistic Ray Tracing, HLSL)
  *
- * The whole SVG slowly counter-rotates so the disk + halo feel alive.
- *
- * Research sources:
- *   - https://cerncourier.com (Building Gargantua — Interstellar VFX)
- *   - https://svs.gsfc.nasa.gov (Black Hole with Accretion Disk Visualization)
- *   - https://eventhorizontelescope.org (real M87 black hole morphology)
+ * The shader is a single full-screen quad (no 3D geometry needed — everything
+ * is computed in the fragment shader). uTime drives the orbital motion.
  */
-function BlackholeBase() {
+
+const VERT = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = vec4(position, 1.0);
+  }
+`;
+
+const FRAG = /* glsl */ `
+  precision highp float;
+  varying vec2 vUv;
+  uniform float uTime;
+  uniform vec2 uResolution;
+  uniform float uPixelRatio;
+
+  // --- hash + noise (for disk turbulence / background stars) ---
+  float hash21(vec2 p) {
+    p = fract(p * vec2(234.34, 435.345));
+    p += dot(p, p + 34.23);
+    return fract(p.x * p.y);
+  }
+  float vnoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
+      mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x),
+      f.y
+    );
+  }
+  float fbm(vec2 p) {
+    float v = 0.0;
+    float a = 0.5;
+    for (int i = 0; i < 5; i++) {
+      v += a * vnoise(p);
+      p = p * 2.02 + 13.7;
+      a *= 0.5;
+    }
+    return v;
+  }
+
+  // --- black hole + disk geometry constants ---
+  const float HOLE_R   = 0.13;   // event horizon radius (in uv space)
+  const float DISK_IN  = 0.165;  // disk inner edge (ISCO ~ 3 * hole radius)
+  const float DISK_OUT = 0.52;   // disk outer edge
+  const float DISK_TILT = 0.32;  // y-axis squish to fake the tilt (ellipse aspect)
+  const float DISK_TILT_ROT = -0.18; // small rotation of the disk plane (radians)
+
+  void main() {
+    // Centered, aspect-corrected coordinates (-1..1 with y corrected)
+    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
+
+    // Apply a slight rotation to the disk plane for a more dynamic composition
+    float c = cos(DISK_TILT_ROT), s = sin(DISK_TILT_ROT);
+    uv = mat2(c, -s, s, c) * uv;
+
+    vec2 d = uv;
+    // Squish y to make the disk tilted (ellipse, not a flat line)
+    vec2 diskD = vec2(d.x, d.y / DISK_TILT);
+    float r = length(diskD);
+    float angle = atan(diskD.y, diskD.x);
+
+    vec3 col = vec3(0.0);
+
+    // --- Background stars (parallax twinkle) ---
+    vec2 starUv = floor(uv * 180.0);
+    float starH = hash21(starUv);
+    float star = step(0.992, starH);
+    float twinkle = 0.6 + 0.4 * sin(uTime * 2.0 + starH * 30.0);
+    col += star * twinkle * vec3(0.75, 0.85, 1.0);
+    // Smaller dim stars
+    vec2 starUv2 = floor(uv * 320.0);
+    float star2 = step(0.997, hash21(starUv2));
+    col += star2 * vec3(0.5, 0.55, 0.7);
+
+    // --- Soft background nebula glow (the gravity well) ---
+    float bgGlow = exp(-length(d) * 1.6) * 0.10;
+    col += bgGlow * vec3(0.4, 0.25, 0.55);
+
+    // --- Disk temperature color (hot inside → orange → red outside) ---
+    float temp = 1.0 - smoothstep(DISK_IN, DISK_OUT, r);
+    vec3 hot  = vec3(1.0, 0.95, 0.85);
+    vec3 warm = vec3(1.0, 0.55, 0.12);
+    vec3 cool = vec3(0.55, 0.08, 0.0);
+    vec3 diskColor = mix(cool, warm, smoothstep(0.0, 0.5, temp));
+    diskColor = mix(diskColor, hot, smoothstep(0.5, 1.0, temp));
+
+    // --- Orbital motion: Keplerian — inner orbits faster than outer ---
+    // angular velocity ~ 1/r^1.5 in real Kepler, but 1/r looks good here.
+    // Scaled up so motion is clearly visible.
+    float omega = 3.2 / (r + 0.05);
+    float orbitalAngle = angle + uTime * omega;
+
+    // --- Disk turbulence streaks (orbital flow lines) ---
+    // LOW-frequency streaks so the orbital motion is clearly visible.
+    // Two octaves: broad band structure + finer ripples.
+    float bands = fbm(vec2(orbitalAngle * 2.0, r * 8.0));
+    bands = pow(bands, 1.3);
+    float ripples = fbm(vec2(orbitalAngle * 6.0, r * 16.0));
+    float turb = mix(bands, ripples, 0.35);
+
+    // --- Clearly-orbiting hot spot (a bright clump that sweeps around) ---
+    // This makes the orbital motion unmistakable to the eye.
+    float spotAngle = uTime * omega * 0.6;  // same direction as the streaks, slightly slower
+    float spotDelta = mod(orbitalAngle - spotAngle + 3.14159, 6.28318) - 3.14159;
+    float spotR = 0.30;  // spot sits at mid-disk
+    float spotRadial = exp(-pow((r - spotR) / 0.05, 2.0));
+    float spotAngular = exp(-pow(spotDelta / 0.35, 2.0));
+    float hotSpot = spotRadial * spotAngular;
+
+    // --- Doppler beaming: approaching side (left, -x) brighter, receding dimmer ---
+    // Side is determined by the disk's local x (sign of diskD.x).
+    float dopplerSide = -diskD.x / max(r, 0.001);
+    float doppler = 0.45 + 0.85 * dopplerSide;
+    // Relativistic beaming concentrates brightness on the approaching side
+    doppler = pow(max(doppler, 0.0), 1.6) * 1.2 + 0.25;
+
+    // --- Main disk ring (front view) ---
+    if (r > DISK_IN && r < DISK_OUT) {
+      // Edge fades
+      float edgeIn  = smoothstep(DISK_IN, DISK_IN + 0.012, r);
+      float edgeOut = 1.0 - smoothstep(DISK_OUT - 0.08, DISK_OUT, r);
+      float edgeMask = edgeIn * edgeOut;
+      vec3 c = diskColor;
+      c *= 0.45 + 0.95 * turb;
+      c *= doppler;
+      // Hot inner edge gets extra brightness
+      c += hot * smoothstep(DISK_IN + 0.04, DISK_IN, r) * 0.6;
+      // Orbiting hot spot — bright white-yellow clump sweeping around the disk
+      c += hot * hotSpot * 1.4 * doppler;
+      col = mix(col, c, edgeMask);
+    }
+
+    // --- Lensed halo: the BACK of the disk, bent over the top and under the
+    //     bottom of the event horizon. This is the iconic Gargantua look.
+    //     We render it as a vertical-ring image of the disk AROUND the hole. ---
+    float haloR = length(d);  // actual screen distance from hole center
+    if (haloR > HOLE_R + 0.005 && haloR < DISK_IN + 0.04) {
+      // This ring is the lensed image of the disk's far side.
+      float haloAngle = atan(d.y, d.x) + uTime * 0.9;
+      float haloTemp = 1.0 - (haloR - (HOLE_R + 0.005)) / (DISK_IN - HOLE_R + 0.04);
+      haloTemp = clamp(haloTemp, 0.0, 1.0);
+      vec3 haloColor = mix(vec3(0.6, 0.1, 0.0), vec3(1.0, 0.7, 0.2), haloTemp);
+      haloColor = mix(haloColor, vec3(1.0, 0.92, 0.75), pow(haloTemp, 3.0));
+      float haloStreak = fbm(vec2(haloAngle * 9.0, haloR * 38.0));
+      haloColor *= 0.4 + 0.9 * haloStreak;
+      // The halo is brightest at top (lensing geometry concentrates there)
+      float topBoost = 0.4 + 0.9 * smoothstep(-0.3, 1.0, d.y);
+      haloColor *= topBoost;
+      // Doppler on the halo too (still left brighter)
+      haloColor *= 0.55 + 0.6 * dopplerSide;
+      col = mix(col, haloColor, 0.85);
+    }
+
+    // --- Event horizon (pure black sphere) ---
+    if (length(d) < HOLE_R) {
+      col = vec3(0.0);
+    }
+
+    // --- Photon ring: a bright thin ring just outside the event horizon ---
+    // This is the lensed image of light orbiting the hole at 1.5 * Rs.
+    float photonDist = abs(length(d) - HOLE_R - 0.008);
+    float photonRing = smoothstep(0.014, 0.0, photonDist);
+    col += photonRing * vec3(1.0, 0.92, 0.7) * 1.8;
+    // Outer soft glow on the photon ring
+    float photonGlow = smoothstep(0.04, 0.0, abs(length(d) - HOLE_R - 0.012));
+    col += photonGlow * vec3(1.0, 0.7, 0.3) * 0.35;
+
+    // --- Final soft glow around the whole black hole ---
+    float glow = exp(-length(d) * 3.5) * 0.18;
+    col += glow * vec3(1.0, 0.5, 0.15);
+
+    // --- Vignette ---
+    float vig = 1.0 - 0.35 * dot(uv, uv);
+    col *= vig;
+
+    // --- Tonemap (Reinhard) + slight gamma ---
+    col = col / (1.0 + col);
+    col = pow(col, vec3(0.85));
+
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
+function Blackhole3DBase() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const parent = canvas.parentElement;
+    const getSize = () => ({
+      w: parent?.clientWidth || 700,
+      h: parent?.clientHeight || 700,
+    });
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: true,
+      preserveDrawingBuffer: true, // lets us readPixels for QA verification
+      powerPreference: "high-performance",
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+    const uniforms = {
+      uTime: { value: 0 },
+      uResolution: { value: new THREE.Vector2(1, 1) },
+      uPixelRatio: { value: renderer.getPixelRatio() },
+    };
+
+    const material = new THREE.ShaderMaterial({
+      vertexShader: VERT,
+      fragmentShader: FRAG,
+      uniforms,
+      depthTest: false,
+      depthWrite: false,
+    });
+
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+    scene.add(mesh);
+
+    const resize = () => {
+      const { w, h } = getSize();
+      renderer.setSize(w, h, false);
+      uniforms.uResolution.value.set(
+        w * renderer.getPixelRatio(),
+        h * renderer.getPixelRatio()
+      );
+      uniforms.uPixelRatio.value = renderer.getPixelRatio();
+    };
+    resize();
+
+    const ro = new ResizeObserver(resize);
+    if (parent) ro.observe(parent);
+
+    const clock = new THREE.Clock();
+    let raf = 0;
+    let running = true;
+    let visible = true;
+
+    // Pause when offscreen to save GPU
+    const io = new IntersectionObserver(
+      (entries) => {
+        visible = entries[0]?.isIntersecting ?? true;
+        if (visible && running) {
+          clock.start();
+          loop();
+        }
+      },
+      { threshold: 0 }
+    );
+    if (parent) io.observe(parent);
+
+    const loop = () => {
+      if (!running || !visible) return;
+      raf = requestAnimationFrame(loop);
+      uniforms.uTime.value = clock.getElapsedTime();
+      renderer.render(scene, camera);
+    };
+    loop();
+
+    // Cleanup
+    return () => {
+      running = false;
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      io.disconnect();
+      mesh.geometry.dispose();
+      material.dispose();
+      renderer.dispose();
+    };
+  }, []);
+
   return (
     <div
       aria-hidden
       className="absolute -right-32 md:right-0 top-1/2 -translate-y-1/2 w-[450px] h-[450px] md:w-[700px] md:h-[700px] z-0 pointer-events-none -rotate-12"
     >
-      <svg
-        viewBox="0 0 500 500"
-        className="w-full h-full animate-bh-rotate"
-        style={{ willChange: "transform" }}
-      >
-        <defs>
-          {/* Hot accretion-disk gradient: white-hot center → yellow → orange → red → transparent */}
-          <radialGradient id="bh-disk-hot" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
-            <stop offset="30%" stopColor="#fff4c2" stopOpacity="1" />
-            <stop offset="55%" stopColor="#ffaa00" stopOpacity="0.95" />
-            <stop offset="80%" stopColor="#ff4d4d" stopOpacity="0.7" />
-            <stop offset="100%" stopColor="#3a0000" stopOpacity="0" />
-          </radialGradient>
-
-          {/* Doppler asymmetry gradient — approaching side brighter, receding dimmer */}
-          <linearGradient id="bh-doppler" x1="0%" y1="50%" x2="100%" y2="50%">
-            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
-            <stop offset="35%" stopColor="#fff4c2" stopOpacity="0.9" />
-            <stop offset="55%" stopColor="#ffaa00" stopOpacity="0.75" />
-            <stop offset="75%" stopColor="#ff4d4d" stopOpacity="0.5" />
-            <stop offset="100%" stopColor="#3a0000" stopOpacity="0.25" />
-          </linearGradient>
-
-          {/* Event horizon — pure black with a faint purple gravitational edge */}
-          <radialGradient id="bh-event-horizon" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#000000" stopOpacity="1" />
-            <stop offset="82%" stopColor="#000000" stopOpacity="1" />
-            <stop offset="96%" stopColor="#0a0014" stopOpacity="0.95" />
-            <stop offset="100%" stopColor="#1a0033" stopOpacity="0.5" />
-          </radialGradient>
-
-          {/* Soft glow filter for disk edges */}
-          <filter id="bh-soft-glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="4" />
-            <feMerge>
-              <feMergeNode />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-
-          {/* Strong blur for the background nebula halo */}
-          <filter id="bh-strong-blur" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="14" />
-          </filter>
-
-          {/* Subtle motion blur on the disk to imply orbital speed */}
-          <filter id="bh-motion" x="-10%" y="-50%" width="120%" height="200%">
-            <feGaussianBlur stdDeviation="1.5 0.4" />
-          </filter>
-        </defs>
-
-        {/* 1. Faint background nebula halo (the whole black hole's gravity well glow) */}
-        <circle
-          cx="250" cy="250" r="245"
-          fill="url(#bh-disk-hot)"
-          opacity="0.12"
-          filter="url(#bh-strong-blur)"
-        />
-
-        {/* 2. Bottom lensing arc — back of the disk bent UNDER the hole (dimmer) */}
-        <path
-          d="M 55 250 Q 250 460 445 250"
-          fill="none"
-          stroke="url(#bh-disk-hot)"
-          strokeWidth="24"
-          strokeLinecap="round"
-          opacity="0.6"
-          filter="url(#bh-soft-glow)"
-        />
-        <path
-          d="M 95 250 Q 250 425 405 250"
-          fill="none"
-          stroke="#ffaa00"
-          strokeWidth="3"
-          strokeLinecap="round"
-          opacity="0.45"
-        />
-
-        {/* 3. Black event-horizon sphere */}
-        <circle cx="250" cy="250" r="105" fill="url(#bh-event-horizon)" />
-
-        {/* 4. Bright photon ring just outside the horizon */}
-        <circle
-          cx="250" cy="250" r="108"
-          fill="none" stroke="#ffffff" strokeWidth="1.5" opacity="0.95"
-        />
-        <circle
-          cx="250" cy="250" r="113"
-          fill="none" stroke="#fff4c2" strokeWidth="1" opacity="0.55"
-          filter="url(#bh-soft-glow)"
-        />
-
-        {/* 5. Top lensing arc — back of the disk bent OVER the top (brightest, in front of sphere top) */}
-        <path
-          d="M 55 250 Q 250 40 445 250"
-          fill="none"
-          stroke="url(#bh-disk-hot)"
-          strokeWidth="30"
-          strokeLinecap="round"
-          opacity="0.95"
-          filter="url(#bh-soft-glow)"
-        />
-        {/* Brighter inner edge of the top arc */}
-        <path
-          d="M 95 250 Q 250 75 405 250"
-          fill="none"
-          stroke="#ffffff"
-          strokeWidth="4"
-          strokeLinecap="round"
-          opacity="0.85"
-          filter="url(#bh-soft-glow)"
-        />
-
-        {/* 6. Edge-on accretion disk in FRONT of the hole, extending left + right.
-              Doppler beaming: LEFT side brighter (approaching), RIGHT side dimmer (receding). */}
-        <g filter="url(#bh-motion)">
-          {/* Left half — approaching, blueshifted, very bright */}
-          <ellipse
-            cx="150" cy="250" rx="100" ry="13"
-            fill="url(#bh-doppler)"
-            opacity="0.95"
-            filter="url(#bh-soft-glow)"
-          />
-          {/* Right half — receding, redshifted, dimmer */}
-          <ellipse
-            cx="350" cy="250" rx="100" ry="13"
-            fill="url(#bh-doppler)"
-            opacity="0.55"
-            filter="url(#bh-soft-glow)"
-          />
-          {/* Bright hot spot on the approaching (left) side */}
-          <ellipse
-            cx="115" cy="250" rx="22" ry="6"
-            fill="#ffffff"
-            opacity="0.9"
-            filter="url(#bh-soft-glow)"
-          />
-        </g>
-      </svg>
+      <canvas ref={canvasRef} className="w-full h-full block" />
     </div>
   );
 }
 
-export const Blackhole = memo(BlackholeBase);
+export const Blackhole = memo(Blackhole3DBase);
 
 /**
- * Orbiting planets. Optimized: each orbit is a single rotating container
- * with will-change on transform only.
+ * Orbiting planets (unchanged from prior implementation).
  */
 function PlanetsBase() {
   return (

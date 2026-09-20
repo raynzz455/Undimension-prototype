@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, isDbConfigured } from "@/lib/db";
 import { PORTFOLIO_PROJECTS } from "@/lib/undimension/data";
 import { requireChaosMode } from "@/lib/chaos-auth";
+import { rateLimit, getClientIP } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,8 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const auth = await requireChaosMode();
   if (!auth.authorized) return NextResponse.json({ error: "CHAOS MODE REQUIRED" }, { status: 403 });
+  const rl = rateLimit(getClientIP(req));
+  if (!rl.allowed) return NextResponse.json({ error: "Rate limit exceeded." }, { status: 429, headers: { "Retry-After": String(rl.retryAfter) } });
   try {
     const body = await req.json();
     const title = String(body.title || "").trim().slice(0, 80);
@@ -47,6 +50,8 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const auth = await requireChaosMode();
   if (!auth.authorized) return NextResponse.json({ error: "CHAOS MODE REQUIRED" }, { status: 403 });
+  const rl = rateLimit(getClientIP(req));
+  if (!rl.allowed) return NextResponse.json({ error: "Rate limit exceeded." }, { status: 429, headers: { "Retry-After": String(rl.retryAfter) } });
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");

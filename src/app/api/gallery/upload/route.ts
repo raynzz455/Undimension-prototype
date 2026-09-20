@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, isDbConfigured } from "@/lib/db";
 import { requireChaosMode } from "@/lib/chaos-auth";
+import { validateImageUpload, validationErrorResponse } from "@/lib/image-validate";
 
 export const dynamic = "force-dynamic";
 const MAX_FILE_BYTES = 4 * 1024 * 1024;
@@ -28,56 +29,11 @@ export async function POST(req: NextRequest) {
   if (!title) return NextResponse.json({ error: "Judul wajib diisi.", step: "titleCheck" }, { status: 400 });
   if (file.size > MAX_FILE_BYTES) return NextResponse.json({ error: `Maksimal ${MAX_FILE_BYTES / 1024 / 1024}MB.`, step: "sizeCheck" }, { status: 413 });
 
-  // SECURITY: extension allowlist + content-type validation + magic-byte check.
-  // Prevents stored XSS via .svg/.html uploads and content-type spoofing.
-  const ALLOWED = new Map([
-    ["jpg", "image/jpeg"],
-    ["jpeg", "image/jpeg"],
-    ["png", "image/png"],
-    ["webp", "image/webp"],
-    ["gif", "image/gif"],
-  ]);
-  const ext = (file.name.split(".").pop() || "").toLowerCase();
-  if (!ALLOWED.has(ext)) {
-    return NextResponse.json({ error: `Ekstensi .${ext} tidak diizinkan. Hanya jpg/jpeg/png/webp/gif.`, step: "extCheck" }, { status: 400 });
-  }
-  const declaredType = (file.type || "").toLowerCase();
-  const expectedType = ALLOWED.get(ext)!;
-  if (declaredType && declaredType !== expectedType) {
-    return NextResponse.json({ error: `Content-Type ${declaredType} tidak cocok dengan ekstensi .${ext}.`, step: "typeMismatch" }, { status: 400 });
-  }
-
-  // Read file into buffer FIRST — needed for magic-byte validation below.
-  let buffer: Buffer;
-  try {
-    buffer = Buffer.from(await file.arrayBuffer());
-  } catch (e) {
-    return NextResponse.json({ error: "Gagal convert file ke buffer", detail: e instanceof Error ? e.message : String(e), step: "buffer" }, { status: 500 });
-  }
-
-  // SECURITY: magic-byte signature check — verify the actual file content is an image,
-  // not a script disguised as one (e.g., SVG with <script>, HTML with JS).
-  // Done BEFORE the Supabase/DB config checks so malicious files are rejected
-  // even when infrastructure is down (defense-in-depth).
-  const SIGS: Record<string, number[]> = {
-    jpg: [0xff, 0xd8, 0xff],
-    jpeg: [0xff, 0xd8, 0xff],
-    png: [0x89, 0x50, 0x4e, 0x47],
-    webp: [0x52, 0x49, 0x46, 0x46], // "RIFF"
-    gif: [0x47, 0x49, 0x46, 0x38],  // "GIF8"
-  };
-  const sig = SIGS[ext];
-  if (sig && buffer.length >= sig.length) {
-    for (let i = 0; i < sig.length; i++) {
-      if (buffer[i] !== sig[i]) {
-        return NextResponse.json({ error: "File rusak atau bukan gambar valid (magic byte mismatch).", step: "magicByte" }, { status: 400 });
-      }
-    }
-    // For webp, also verify "WEBP" at offset 8
-    if (ext === "webp" && buffer.length >= 12 && buffer.subarray(8, 12).toString("ascii") !== "WEBP") {
-      return NextResponse.json({ error: "File .webp tidak valid (bukan WEBP RIFF).", step: "webpVerify" }, { status: 400 });
-    }
-  }
+  // SECURITY: shared 3-layer validation (extension allowlist + content-type +
+  // magic-byte). Runs BEFORE infra state checks (defense-in-depth).
+  const v = await validateImageUpload(file);
+  if (!v.ok) return validationErrorResponse(v);
+  const { ext, expectedType, buffer } = v;
 
   // Infra config checks — AFTER security validation.
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -89,8 +45,7 @@ export async function POST(req: NextRequest) {
   const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const uploadPath = `gallery/uploads/${fileName}`;
 
-  // DB config check — AFTER security validation so malicious files are rejected
-  // even when the DB is down.
+  // DB config check — AFTER security validation.
   if (!isDbConfigured()) return NextResponse.json({ error: "Database not configured.", step: "dbConfig" }, { status: 503 });
 
   try {

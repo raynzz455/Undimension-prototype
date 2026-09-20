@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, isDbConfigured } from "@/lib/db";
 import { requireChaosMode } from "@/lib/chaos-auth";
+import { validateImageUpload, validationErrorResponse } from "@/lib/image-validate";
 
 export const dynamic = "force-dynamic";
 const MAX_FILE_BYTES = 4 * 1024 * 1024;
@@ -8,7 +9,6 @@ const MAX_FILE_BYTES = 4 * 1024 * 1024;
 export async function POST(req: NextRequest) {
   const auth = await requireChaosMode();
   if (!auth.authorized) return NextResponse.json({ error: "CHAOS MODE REQUIRED", step: "auth" }, { status: 403 });
-  if (!isDbConfigured()) return NextResponse.json({ error: "Database not configured.", step: "dbConfig" }, { status: 503 });
 
   let file: File | null = null;
   let achievementId = "";
@@ -27,20 +27,19 @@ export async function POST(req: NextRequest) {
   if (!achievementId) return NextResponse.json({ error: "Achievement ID wajib diisi.", step: "achievementIdCheck" }, { status: 400 });
   if (file.size > MAX_FILE_BYTES) return NextResponse.json({ error: `Maksimal ${MAX_FILE_BYTES / 1024 / 1024}MB.`, step: "sizeCheck" }, { status: 413 });
 
+  // SECURITY: shared 3-layer validation (extension allowlist + content-type +
+  // magic-byte). Runs BEFORE infra state checks (defense-in-depth).
+  const v = await validateImageUpload(file);
+  if (!v.ok) return validationErrorResponse(v);
+  const { ext, expectedType, buffer } = v;
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
   if (!supabaseUrl || !supabaseKey || supabaseUrl.includes("xxxxx")) {
     return NextResponse.json({ error: "Supabase belum dikonfigurasi.", step: "supabaseConfig" }, { status: 503 });
   }
+  if (!isDbConfigured()) return NextResponse.json({ error: "Database not configured.", step: "dbConfig" }, { status: 503 });
 
-  let buffer: Buffer;
-  try {
-    buffer = Buffer.from(await file.arrayBuffer());
-  } catch (e) {
-    return NextResponse.json({ error: "Gagal convert file ke buffer", detail: e instanceof Error ? e.message : String(e), step: "buffer" }, { status: 500 });
-  }
-
-  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
   const fileName = `achievement-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const uploadPath = `gallery/achievements/${fileName}`;
 

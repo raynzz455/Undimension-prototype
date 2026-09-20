@@ -1100,41 +1100,77 @@ function AchievementsTab() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// GAMES TAB — Game metadata + ML player stats + compatibility + DnD characters
+// GAMES TAB — game-specific: metadata + moments/photos (all) + ML stats (ml only)
+//              + DnD characters/campaigns (dnd only) + compatibility (all)
 // ═══════════════════════════════════════════════════════════════════════════
 function GamesTab() {
   const { data: gamesData, refetch: refetchGames } = useFetch<{ games: { id: string; title: string; subtitle: string; description: string; accent: string; carouselTitle: string; bg: string; reverse: boolean }[] }>("/api/games");
   const { data: statsData, refetch: refetchStats } = useFetch<{ stats: { id: string; memberId: string; gameId: string; role: string | null; favHero: string | null; rank: string | null; kda: string | null; winRate: string | null }[] }>("/api/games/player-stats");
   const { data: compatData, refetch: refetchCompat } = useFetch<{ compat: { id: string; memberId: string; gameId: string; level: number }[] }>("/api/games/compatibility");
   const { data: dndData, refetch: refetchDnd } = useFetch<{ characters: { id: string; memberId: string; characterName: string; race: string; charClass: string; level: number; img: string | null; str: number; dex: number; con: number; int: number; wis: number; cha: number }[] }>("/api/games/dnd-characters");
+  const { data: dndCampaignData, refetch: refetchDndCampaigns } = useFetch<{ campaigns: { id: string; name: string; dm: string; status: string; description: string; sessions: number; storyOutline: string | null }[] }>("/api/games/dnd-campaigns");
   const { chaosFetch } = useChaosFetch();
   const { play } = useSfx();
   const [selectedGame, setSelectedGame] = useState("ml");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // Moment (photo) upload state
+  const [momentFile, setMomentFile] = useState<File | null>(null);
+  const [momentTitle, setMomentTitle] = useState("");
+  const [momentDesc, setMomentDesc] = useState("");
+  const [uploadingMoment, setUploadingMoment] = useState(false);
+
+  // DnD character create state
+  const [dndMember, setDndMember] = useState("razka");
+  const [dndName, setDndName] = useState("");
+  const [dndRace, setDndRace] = useState("Human");
+  const [dndClass, setDndClass] = useState("Fighter");
+  const [dndLevel, setDndLevel] = useState("1");
+
+  // DnD campaign create state
+  const [campName, setCampName] = useState("");
+  const [campDm, setCampDm] = useState("");
+  const [campStatus, setCampStatus] = useState("ONGOING");
+  const [campDesc, setCampDesc] = useState("");
+  const [campSessions, setCampSessions] = useState("0");
+
+  // Fetch moments for the selected game (URL changes when selectedGame changes)
+  const momentsUrl = `/api/games/moments?gameId=${selectedGame}`;
+  const { data: momentsData, refetch: refetchMoments } = useFetch<{ moments: { id: string; title: string; description: string | null; img: string; order: number }[] }>(momentsUrl);
+
   const games = gamesData?.games ?? [];
   const stats = statsData?.stats ?? [];
   const compat = compatData?.compat ?? [];
   const dndChars = dndData?.characters ?? [];
+  const dndCampaigns = dndCampaignData?.campaigns ?? [];
+  const moments = momentsData?.moments ?? [];
 
   const flash = (msg: string, isErr = false) => {
     if (isErr) { setError(msg); setSuccess(null); } else { setSuccess(msg); setError(null); play("submit"); }
     setTimeout(() => { setError(null); setSuccess(null); }, 4000);
   };
 
-  // --- ML player stats (role/hero/KDA/WR/rank per member) ---
+  // --- Game metadata PUT ---
+  const updateGameMeta = async (gameId: string, field: string, value: string) => {
+    try {
+      const url = `/api/games/${gameId}`;
+      const res = await chaosFetch(url, { method: "PUT", body: JSON.stringify({ [field]: value }) });
+      const d = await res.json(); if (!res.ok) throw new Error(d.error);
+      refetchGames(); flash(`✓ ${gameId.toUpperCase()} updated.`);
+    } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
+  };
+
+  // --- ML player stats (role/hero/KDA/WR/rank per member) — ML ONLY ---
   const updateStat = async (memberId: string, field: string, value: string) => {
     const existing = stats.find((s) => s.memberId === memberId && s.gameId === selectedGame);
     try {
       if (existing) {
-        // Update via a fresh PUT isn't available; we POST to upsert by memberId+gameId.
-        // The POST route uses unique constraint, so delete + recreate.
-        await chaosFetch(`/api/games/player-stats?id=${existing.id}`, { method: "DELETE" });
+        const delUrl = `/api/games/player-stats?id=${existing.id}`;
+        await chaosFetch(delUrl, { method: "DELETE" });
       }
       const payload: Record<string, string> = { memberId, gameId: selectedGame };
       if (field) payload[field] = value;
-      // Carry over existing fields if we had a record
       if (existing) {
         if (field !== "role" && existing.role) payload.role = existing.role;
         if (field !== "favHero" && existing.favHero) payload.favHero = existing.favHero;
@@ -1157,13 +1193,37 @@ function GamesTab() {
     } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
   };
 
-  // --- DnD character create/PUT ---
-  const [dndMember, setDndMember] = useState("razka");
-  const [dndName, setDndName] = useState("");
-  const [dndRace, setDndRace] = useState("Human");
-  const [dndClass, setDndClass] = useState("Fighter");
-  const [dndLevel, setDndLevel] = useState("1");
+  // --- Moment (photo) upload ---
+  const uploadMoment = async () => {
+    if (!momentFile) { flash("File wajib diupload.", true); return; }
+    if (!momentTitle.trim()) { flash("Title wajib diisi.", true); return; }
+    setUploadingMoment(true);
+    try {
+      const form = new FormData();
+      form.append("file", momentFile);
+      form.append("gameId", selectedGame);
+      form.append("title", momentTitle);
+      form.append("description", momentDesc);
+      const res = await chaosFetch("/api/games/moments", { method: "POST", body: form });
+      const d = await res.json(); if (!res.ok) throw new Error(d.error);
+      const savedTitle = d.moment?.title || "Moment";
+      setMomentFile(null); setMomentTitle(""); setMomentDesc("");
+      refetchMoments(); flash(`✓ ${savedTitle} uploaded!`);
+    } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
+    finally { setUploadingMoment(false); }
+  };
 
+  const deleteMoment = async (id: string, title: string) => {
+    if (!confirm(`Hapus moment "${title}"?`)) return;
+    try {
+      const delUrl = `/api/games/moments?id=${id}`;
+      const res = await chaosFetch(delUrl, { method: "DELETE" });
+      if (!res.ok) throw new Error("Gagal");
+      refetchMoments(); flash(`✓ Moment dihapus.`); play("close");
+    } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
+  };
+
+  // --- DnD character create ---
   const createDnd = async () => {
     if (!dndName.trim()) { flash("Character name wajib diisi.", true); return; }
     try {
@@ -1179,18 +1239,34 @@ function GamesTab() {
   const deleteDnd = async (id: string, name: string) => {
     if (!confirm(`Hapus "${name}"?`)) return;
     try {
-      const res = await chaosFetch(`/api/games/dnd-characters?id=${id}`, { method: "DELETE" });
+      const delUrl = `/api/games/dnd-characters?id=${id}`;
+      const res = await chaosFetch(delUrl, { method: "DELETE" });
       if (!res.ok) throw new Error("Gagal");
       refetchDnd(); flash(`✓ ${name} dihapus.`); play("close");
     } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
   };
 
-  // --- Game metadata PUT ---
-  const updateGameMeta = async (gameId: string, field: string, value: string) => {
+  // --- DnD campaign create ---
+  const createCampaign = async () => {
+    if (!campName.trim()) { flash("Campaign name wajib diisi.", true); return; }
     try {
-      const res = await chaosFetch(`/api/games/${gameId}`, { method: "PUT", body: JSON.stringify({ [field]: value }) });
+      const res = await chaosFetch("/api/games/dnd-campaigns", {
+        method: "POST",
+        body: JSON.stringify({ name: campName, dm: campDm || "Unknown DM", status: campStatus, description: campDesc, sessions: Number(campSessions) || 0 }),
+      });
       const d = await res.json(); if (!res.ok) throw new Error(d.error);
-      refetchGames(); flash(`✓ ${gameId.toUpperCase()} updated.`);
+      const savedName = campName || "Campaign";
+      setCampName(""); setCampDesc(""); setCampSessions("0"); refetchDndCampaigns(); flash(`✓ ${savedName} dibuat!`);
+    } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
+  };
+
+  const deleteCampaign = async (id: string, name: string) => {
+    if (!confirm(`Hapus campaign "${name}"?`)) return;
+    try {
+      const delUrl = `/api/games/dnd-campaigns?id=${id}`;
+      const res = await chaosFetch(delUrl, { method: "DELETE" });
+      if (!res.ok) throw new Error("Gagal");
+      refetchDndCampaigns(); flash(`✓ Campaign dihapus.`); play("close");
     } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
   };
 
@@ -1199,11 +1275,22 @@ function GamesTab() {
   const gameCompat = compat.filter((c) => c.gameId === selectedGame);
   const COMPAT_LABELS = ["—", "RARE", "CASUAL", "MAIN"];
 
+  // Section wrapper for consistent styling
+  const Section = ({ title, color, icon: Icon, children }: { title: string; color: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) => (
+    <div className="border-8 bg-black p-6" style={{ borderColor: color, boxShadow: `12px 12px 0 ${color}` }}>
+      <h3 className="font-bebas text-3xl mb-3 flex items-center gap-2" style={{ color }}><Icon className="w-6 h-6" /> {title}</h3>
+      {children}
+    </div>
+  );
+
+  const gameLabel = selectedGame.toUpperCase();
+
   return (
     <div className="space-y-4">
       {/* Game selector */}
       <div className="border-8 border-[#00e5ff] bg-black p-6 shadow-[12px_12px_0_#00e5ff]">
         <h2 className="font-bebas text-4xl text-[#00e5ff] mb-4 flex items-center gap-2"><Plus className="w-8 h-8" /> GAMES MANAGER</h2>
+        <div className="font-mono-ud text-xs text-white/60 mb-2">▸ Pilih game untuk manage. Setiap game punya section berbeda — ML punya player stats, DnD punya characters + campaigns, semua game punya moments/photos.</div>
         <div className="flex flex-wrap gap-2 mb-4">
           {games.map((g) => (
             <button key={g.id} onClick={() => { play("click"); setSelectedGame(g.id); }}
@@ -1213,50 +1300,131 @@ function GamesTab() {
             </button>
           ))}
         </div>
-
         {error && <div className="bg-[#ff4d4d] text-white px-3 py-2 border-2 border-white font-mono-ud text-xs font-bold mb-3">! {error}</div>}
         {success && <div className="bg-[#d4ff00] text-black px-3 py-2 border-2 border-black font-mono-ud text-xs font-bold mb-3">{success}</div>}
+      </div>
 
-        {/* Game metadata editor */}
-        {selectedGameObj && (
-          <div className="space-y-2 border-2 border-[#00e5ff]/30 p-3">
-            <div className="font-mono-ud text-xs text-[#00e5ff] tracking-widest mb-1">▸ GAME METADATA</div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <label className="block"><span className="font-mono-ud text-[10px] text-white/60">TITLE</span><input defaultValue={selectedGameObj.title} onBlur={(e) => updateGameMeta(selectedGame, "title", e.target.value)} className="block w-full px-2 py-1.5 border-2 border-[#00e5ff] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
-              <label className="block"><span className="font-mono-ud text-[10px] text-white/60">SUBTITLE</span><input defaultValue={selectedGameObj.subtitle} onBlur={(e) => updateGameMeta(selectedGame, "subtitle", e.target.value)} className="block w-full px-2 py-1.5 border-2 border-[#00e5ff] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
-            </div>
-            <label className="block"><span className="font-mono-ud text-[10px] text-white/60">DESCRIPTION</span><textarea defaultValue={selectedGameObj.description} onBlur={(e) => updateGameMeta(selectedGame, "description", e.target.value)} rows={2} className="block w-full px-2 py-1.5 border-2 border-[#00e5ff] bg-[#1a1a1a] text-white font-mono-ud text-sm resize-none focus:outline-none focus:border-[#ff00ff]" /></label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <label className="block"><span className="font-mono-ud text-[10px] text-white/60">ACCENT COLOR</span><input type="color" defaultValue={selectedGameObj.accent} onBlur={(e) => updateGameMeta(selectedGame, "accent", e.target.value)} className="w-full h-8 border-2 border-[#00e5ff] bg-transparent cursor-pointer" /></label>
-              <label className="block"><span className="font-mono-ud text-[10px] text-white/60">CAROUSEL TITLE</span><input defaultValue={selectedGameObj.carouselTitle} onBlur={(e) => updateGameMeta(selectedGame, "carouselTitle", e.target.value)} className="block w-full px-2 py-1.5 border-2 border-[#00e5ff] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
-            </div>
+      {/* 1. GAME METADATA (all games) */}
+      {selectedGameObj && (
+        <Section title={`GAME METADATA — ${selectedGameObj.title}`} color="#00e5ff" icon={Settings}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <label className="block"><span className="font-mono-ud text-[10px] text-white/60">TITLE</span><input defaultValue={selectedGameObj.title} onBlur={(e) => updateGameMeta(selectedGame, "title", e.target.value)} className="block w-full px-2 py-1.5 border-2 border-[#00e5ff] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
+            <label className="block"><span className="font-mono-ud text-[10px] text-white/60">SUBTITLE</span><input defaultValue={selectedGameObj.subtitle} onBlur={(e) => updateGameMeta(selectedGame, "subtitle", e.target.value)} className="block w-full px-2 py-1.5 border-2 border-[#00e5ff] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
           </div>
-        )}
-      </div>
+          <label className="block mt-2"><span className="font-mono-ud text-[10px] text-white/60">DESCRIPTION</span><textarea defaultValue={selectedGameObj.description} onBlur={(e) => updateGameMeta(selectedGame, "description", e.target.value)} rows={2} className="block w-full px-2 py-1.5 border-2 border-[#00e5ff] bg-[#1a1a1a] text-white font-mono-ud text-sm resize-none focus:outline-none focus:border-[#ff00ff]" /></label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+            <label className="block"><span className="font-mono-ud text-[10px] text-white/60">ACCENT COLOR</span><input type="color" defaultValue={selectedGameObj.accent} onBlur={(e) => updateGameMeta(selectedGame, "accent", e.target.value)} className="w-full h-8 border-2 border-[#00e5ff] bg-transparent cursor-pointer" /></label>
+            <label className="block"><span className="font-mono-ud text-[10px] text-white/60">CAROUSEL TITLE</span><input defaultValue={selectedGameObj.carouselTitle} onBlur={(e) => updateGameMeta(selectedGame, "carouselTitle", e.target.value)} className="block w-full px-2 py-1.5 border-2 border-[#00e5ff] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
+          </div>
+        </Section>
+      )}
 
-      {/* ML player stats editor (most relevant for the ml game) */}
-      <div className="border-8 border-[#ff8c00] bg-black p-6 shadow-[12px_12px_0_#ff8c00]">
-        <h3 className="font-bebas text-3xl text-[#ff8c00] mb-3 flex items-center gap-2"><Users className="w-6 h-6" /> PLAYER STATS — {selectedGame.toUpperCase()}</h3>
-        <div className="space-y-2">
-          {MEMBER_SLUGS.map((slug) => {
-            const s = gameStats.find((st) => st.memberId === slug);
-            return (
-              <div key={slug} className="grid grid-cols-1 md:grid-cols-6 gap-2 items-center border-2 border-[#ff8c00]/30 p-2">
-                <span className="font-bebas text-lg text-[#ff8c00]">{slug.toUpperCase()}</span>
-                <input defaultValue={s?.role || ""} onBlur={(e) => e.target.value !== (s?.role || "") && updateStat(slug, "role", e.target.value)} placeholder="ROLE" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
-                <input defaultValue={s?.favHero || ""} onBlur={(e) => e.target.value !== (s?.favHero || "") && updateStat(slug, "favHero", e.target.value)} placeholder="FAV HERO" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
-                <input defaultValue={s?.rank || ""} onBlur={(e) => e.target.value !== (s?.rank || "") && updateStat(slug, "rank", e.target.value)} placeholder="RANK" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
-                <input defaultValue={s?.kda || ""} onBlur={(e) => e.target.value !== (s?.kda || "") && updateStat(slug, "kda", e.target.value)} placeholder="KDA" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
-                <input defaultValue={s?.winRate || ""} onBlur={(e) => e.target.value !== (s?.winRate || "") && updateStat(slug, "winRate", e.target.value)} placeholder="WR" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
-              </div>
-            );
-          })}
+      {/* 2. MOMENTS / PHOTOS (all games) */}
+      <Section title={`MOMENTS / SCREENSHOTS — ${gameLabel}`} color="#ff8c00" icon={ImageIcon}>
+        <div className="space-y-2 border-2 border-[#ff8c00]/30 p-3 mb-3">
+          <div className="font-mono-ud text-xs text-[#ff8c00] tracking-widest">▸ UPLOAD NEW MOMENT</div>
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(e) => setMomentFile(e.target.files?.[0] || null)} className="block w-full text-xs font-mono-ud text-white file:mr-3 file:py-2 file:px-4 file:border-2 file:border-[#ff8c00] file:bg-[#ff8c00] file:text-black file:font-bold file:cursor-pointer file:hover:bg-[#ff00ff] file:hover:text-white" />
+          <input value={momentTitle} onChange={(e) => setMomentTitle(e.target.value.slice(0, 80))} placeholder="TITLE * (e.g. FIRST DIAMOND, CREEPER MASSACRE)" className="block w-full px-2 py-1.5 border-2 border-[#ff8c00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" />
+          <input value={momentDesc} onChange={(e) => setMomentDesc(e.target.value.slice(0, 300))} placeholder="Description (optional)" className="block w-full px-2 py-1.5 border-2 border-[#ff8c00] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+          <button onClick={uploadMoment} disabled={uploadingMoment} className="w-full bg-[#ff8c00] text-black font-bebas text-2xl py-2 border-2 border-white hover:bg-[#ff00ff] hover:text-white transition-colors no-color-transition disabled:opacity-50">{uploadingMoment ? "UPLOADING..." : "+ UPLOAD MOMENT"}</button>
         </div>
-      </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          {moments.map((m) => (
+            <div key={m.id} className="border-2 border-[#ff8c00]/40 p-2 bg-[#1a1a1a]">
+              <img src={m.img} alt={m.title} className="w-full h-24 object-cover mb-1" loading="lazy" />
+              <div className="font-bebas text-sm text-[#ff8c00] truncate">{m.title}</div>
+              {m.description && <div className="font-mono-ud text-[9px] text-white/40 truncate">{m.description}</div>}
+              <button onClick={() => deleteMoment(m.id, m.title)} className="w-full mt-1 bg-[#ff4d4d] text-white py-1 border border-white font-mono-ud text-[9px] font-bold hover:bg-[#ff8c00] transition-colors no-color-transition">DEL</button>
+            </div>
+          ))}
+          {moments.length === 0 && <div className="col-span-full font-mono-ud text-xs text-white/40 text-center py-4">No moments yet. Upload screenshots above.</div>}
+        </div>
+      </Section>
 
-      {/* Compatibility matrix editor */}
-      <div className="border-8 border-[#d4ff00] bg-black p-6 shadow-[12px_12px_0_#d4ff00]">
-        <h3 className="font-bebas text-3xl text-[#d4ff00] mb-3 flex items-center gap-2"><Shield className="w-6 h-6" /> COMPATIBILITY — {selectedGame.toUpperCase()}</h3>
+      {/* 3. ML PLAYER STATS — ML ONLY */}
+      {selectedGame === "ml" && (
+        <Section title="PLAYER STATS — MOBILE LEGENDS" color="#d4ff00" icon={Users}>
+          <div className="font-mono-ud text-xs text-white/60 mb-2">▸ ML-specific: role, favorite hero, rank, KDA, win rate. Tidak ditampilkan untuk game lain karena setiap game punya stat berbeda.</div>
+          <div className="space-y-2">
+            {MEMBER_SLUGS.map((slug) => {
+              const s = gameStats.find((st) => st.memberId === slug);
+              return (
+                <div key={slug} className="grid grid-cols-1 md:grid-cols-6 gap-2 items-center border-2 border-[#d4ff00]/30 p-2">
+                  <span className="font-bebas text-lg text-[#d4ff00]">{slug.toUpperCase()}</span>
+                  <input defaultValue={s?.role || ""} onBlur={(e) => e.target.value !== (s?.role || "") && updateStat(slug, "role", e.target.value)} placeholder="ROLE" className="px-2 py-1 border border-[#d4ff00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+                  <input defaultValue={s?.favHero || ""} onBlur={(e) => e.target.value !== (s?.favHero || "") && updateStat(slug, "favHero", e.target.value)} placeholder="FAV HERO" className="px-2 py-1 border border-[#d4ff00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+                  <input defaultValue={s?.rank || ""} onBlur={(e) => e.target.value !== (s?.rank || "") && updateStat(slug, "rank", e.target.value)} placeholder="RANK" className="px-2 py-1 border border-[#d4ff00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+                  <input defaultValue={s?.kda || ""} onBlur={(e) => e.target.value !== (s?.kda || "") && updateStat(slug, "kda", e.target.value)} placeholder="KDA" className="px-2 py-1 border border-[#d4ff00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+                  <input defaultValue={s?.winRate || ""} onBlur={(e) => e.target.value !== (s?.winRate || "") && updateStat(slug, "winRate", e.target.value)} placeholder="WR" className="px-2 py-1 border border-[#d4ff00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+                </div>
+              );
+            })}
+          </div>
+        </Section>
+      )}
+
+      {/* 4. D&D CHARACTERS — DnD ONLY */}
+      {selectedGame === "dnd" && (
+        <Section title="D&D CHARACTERS" color="#8a2be2" icon={Award}>
+          <div className="font-mono-ud text-xs text-white/60 mb-2">▸ DnD-specific: character name, race, class, level per member.</div>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-2 mb-3 border-2 border-[#8a2be2]/30 p-3">
+            <select value={dndMember} onChange={(e) => setDndMember(e.target.value)} className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs">{MEMBER_SLUGS.map((m) => <option key={m} value={m}>{m.toUpperCase()}</option>)}</select>
+            <input value={dndName} onChange={(e) => setDndName(e.target.value.slice(0, 60))} placeholder="CHARACTER NAME *" className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+            <input value={dndRace} onChange={(e) => setDndRace(e.target.value.slice(0, 40))} placeholder="RACE" className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+            <input value={dndClass} onChange={(e) => setDndClass(e.target.value.slice(0, 40))} placeholder="CLASS" className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+            <input value={dndLevel} onChange={(e) => setDndLevel(e.target.value.slice(0, 2))} placeholder="LVL 1-20" className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+          </div>
+          <button onClick={createDnd} className="w-full bg-[#8a2be2] text-white font-bebas text-2xl py-2 border-2 border-white hover:bg-[#ff00ff] transition-colors no-color-transition mb-3">+ ADD CHARACTER</button>
+          <div className="space-y-2">
+            {dndChars.map((c) => (
+              <div key={c.id} className="flex items-center justify-between border-2 border-[#8a2be2]/30 p-2">
+                <div className="flex-1">
+                  <span className="font-bebas text-lg text-[#8a2be2]">{c.characterName}</span>
+                  <span className="font-mono-ud text-xs text-white/60 ml-2">{c.memberId.toUpperCase()} · {c.race} · {c.charClass} · LVL {c.level}</span>
+                </div>
+                <button onClick={() => deleteDnd(c.id, c.characterName)} className="bg-[#ff4d4d] text-white px-2 py-1 border-2 border-white font-mono-ud text-[10px] font-bold hover:bg-[#ff8c00] transition-colors no-color-transition">DEL</button>
+              </div>
+            ))}
+            {dndChars.length === 0 && <div className="font-mono-ud text-xs text-white/40 text-center py-4">No D&D characters yet. Add one above.</div>}
+          </div>
+        </Section>
+      )}
+
+      {/* 5. D&D CAMPAIGNS — DnD ONLY */}
+      {selectedGame === "dnd" && (
+        <Section title="D&D CAMPAIGNS" color="#ff4d4d" icon={Shield}>
+          <div className="font-mono-ud text-xs text-white/60 mb-2">▸ DnD-specific: campaign name, DM, status, sessions.</div>
+          <div className="space-y-2 border-2 border-[#ff4d4d]/30 p-3 mb-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <input value={campName} onChange={(e) => setCampName(e.target.value.slice(0, 80))} placeholder="CAMPAIGN NAME *" className="px-2 py-1.5 border-2 border-[#ff4d4d] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+              <input value={campDm} onChange={(e) => setCampDm(e.target.value.slice(0, 60))} placeholder="DM (Dungeon Master)" className="px-2 py-1.5 border-2 border-[#ff4d4d] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <select value={campStatus} onChange={(e) => setCampStatus(e.target.value)} className="px-2 py-1.5 border-2 border-[#ff4d4d] bg-[#1a1a1a] text-white font-mono-ud text-xs">{["ONGOING", "COMPLETED", "PAUSED"].map((s) => <option key={s} value={s}>{s}</option>)}</select>
+              <input value={campSessions} onChange={(e) => setCampSessions(e.target.value.slice(0, 3))} placeholder="SESSIONS" className="px-2 py-1.5 border-2 border-[#ff4d4d] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+            </div>
+            <textarea value={campDesc} onChange={(e) => setCampDesc(e.target.value.slice(0, 500))} placeholder="Description" rows={2} className="block w-full px-2 py-1.5 border-2 border-[#ff4d4d] bg-[#1a1a1a] text-white font-mono-ud text-xs resize-none focus:outline-none focus:border-[#ff00ff]" />
+          </div>
+          <button onClick={createCampaign} className="w-full bg-[#ff4d4d] text-white font-bebas text-2xl py-2 border-2 border-white hover:bg-[#ff00ff] transition-colors no-color-transition mb-3">+ ADD CAMPAIGN</button>
+          <div className="space-y-2">
+            {dndCampaigns.map((c) => (
+              <div key={c.id} className="flex items-center justify-between border-2 border-[#ff4d4d]/30 p-2">
+                <div className="flex-1">
+                  <span className="font-bebas text-lg text-[#ff4d4d]">{c.name}</span>
+                  <span className="font-mono-ud text-xs text-white/60 ml-2">DM: {c.dm} · {c.status} · {c.sessions} sessions</span>
+                  {c.description && <div className="font-mono-ud text-[10px] text-white/40 mt-1">{c.description}</div>}
+                </div>
+                <button onClick={() => deleteCampaign(c.id, c.name)} className="bg-[#ff4d4d] text-white px-2 py-1 border-2 border-white font-mono-ud text-[10px] font-bold hover:bg-[#ff8c00] transition-colors no-color-transition">DEL</button>
+              </div>
+            ))}
+            {dndCampaigns.length === 0 && <div className="font-mono-ud text-xs text-white/40 text-center py-4">No campaigns yet. Add one above.</div>}
+          </div>
+        </Section>
+      )}
+
+      {/* 6. COMPATIBILITY (all games) */}
+      <Section title={`COMPATIBILITY — ${gameLabel}`} color="#d4ff00" icon={Shield}>
+        <div className="font-mono-ud text-xs text-white/60 mb-2">▸ Per-member × game: — (none), RARE, CASUAL, MAIN. Berlaku untuk semua game.</div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {MEMBER_SLUGS.map((slug) => {
             const c = gameCompat.find((co) => co.memberId === slug);
@@ -1277,34 +1445,7 @@ function GamesTab() {
             );
           })}
         </div>
-      </div>
-
-      {/* DnD characters editor */}
-      <div className="border-8 border-[#8a2be2] bg-black p-6 shadow-[12px_12px_0_#8a2be2]">
-        <h3 className="font-bebas text-3xl text-[#8a2be2] mb-3 flex items-center gap-2"><Award className="w-6 h-6" /> D&D CHARACTERS</h3>
-        {/* Create form */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-2 mb-3 border-2 border-[#8a2be2]/30 p-3">
-          <select value={dndMember} onChange={(e) => setDndMember(e.target.value)} className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs">{MEMBER_SLUGS.map((m) => <option key={m} value={m}>{m.toUpperCase()}</option>)}</select>
-          <input value={dndName} onChange={(e) => setDndName(e.target.value.slice(0, 60))} placeholder="CHARACTER NAME *" className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
-          <input value={dndRace} onChange={(e) => setDndRace(e.target.value.slice(0, 40))} placeholder="RACE" className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
-          <input value={dndClass} onChange={(e) => setDndClass(e.target.value.slice(0, 40))} placeholder="CLASS" className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
-          <input value={dndLevel} onChange={(e) => setDndLevel(e.target.value.slice(0, 2))} placeholder="LVL 1-20" className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
-        </div>
-        <button onClick={createDnd} className="w-full bg-[#8a2be2] text-white font-bebas text-2xl py-2 border-2 border-white hover:bg-[#ff00ff] transition-colors no-color-transition mb-3">+ ADD CHARACTER</button>
-        {/* Existing characters */}
-        <div className="space-y-2">
-          {dndChars.map((c) => (
-            <div key={c.id} className="flex items-center justify-between border-2 border-[#8a2be2]/30 p-2">
-              <div className="flex-1">
-                <span className="font-bebas text-lg text-[#8a2be2]">{c.characterName}</span>
-                <span className="font-mono-ud text-xs text-white/60 ml-2">{c.memberId.toUpperCase()} · {c.race} · {c.charClass} · LVL {c.level}</span>
-              </div>
-              <button onClick={() => deleteDnd(c.id, c.characterName)} className="bg-[#ff4d4d] text-white px-2 py-1 border-2 border-white font-mono-ud text-[10px] font-bold hover:bg-[#ff8c00] transition-colors no-color-transition"><Trash2 className="w-3 h-3 inline" /> DEL</button>
-            </div>
-          ))}
-          {dndChars.length === 0 && <div className="font-mono-ud text-xs text-white/40 text-center py-4">No D&D characters yet. Add one above.</div>}
-        </div>
-      </div>
+      </Section>
     </div>
   );
 }

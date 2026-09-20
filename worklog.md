@@ -1738,3 +1738,113 @@ All new games API routes use `sanitizeText()` (strips HTML tags) + `.slice(0, N)
 6. **Audit members/upload route**: if it exists, apply the same shared validation.
 
 Full work record: appended to `/home/z/my-project/worklog.md` (this section).
+
+---
+Task ID: 35
+Agent: main (Z.ai Code)
+Task: User feedback on Task 34's GamesTab: (1) games management should go deeper — including photos (game moments/screenshots), (2) player stats are game-specific — ML has role/hero/KDA/WR but those don't make sense for Minecraft/Roblox/DnD, (3) explore deeper and more organized for games.
+
+## Section 1: What Was Wrong with Task 34's GamesTab
+
+1. **No photo management** — the GamesTab only managed metadata + ML stats + compatibility + DnD characters. It did NOT manage game moments (screenshots) or DnD campaign images. The user wanted deeper management "hingga ke foto foto" (down to the photos).
+
+2. **Player stats shown for ALL games** — the GamesTab showed the 5 ML-specific stat fields (role/favHero/rank/kda/winRate) for every selected game. But "player stat tidak mungkin ada di seluruh game" — ML has those fields, Minecraft/Roblox/DnD don't have "role" or "favHero". The same stats can't exist across all games.
+
+3. **No DnD campaign management** — the schema has DnDCampaign + DnDCampaignImage models, but there was no API route or UI to manage campaigns.
+
+## Section 2: Completed Modifications
+
+### 2.1 New API routes (2 new route files)
+
+**`/api/games/moments/route.ts`** — game moment (screenshot) CRUD:
+- GET `?gameId=minecraft` — list moments for a game, ordered by `order`
+- POST — upload a new moment (FormData: file + gameId + title + description). Uses the shared 3-layer `validateImageUpload()` (extension allowlist + content-type + magic-byte). Uploads to Supabase Storage `games/moments/`, creates a `GameMoment` DB record with auto-incrementing order.
+- DELETE `?id=xxx` — delete a moment
+All chaos-protected + rate-limited (5 req/60s/IP) + sanitized.
+
+**`/api/games/dnd-campaigns/route.ts`** — DnD campaign CRUD:
+- GET — list all campaigns (with images via `include: { images: true }`)
+- POST — create a campaign (name + dm + status + description + storyOutline + sessions)
+- PUT `?id=xxx` — update campaign fields
+- DELETE `?id=xxx` — delete (cascade images via schema `onDelete: Cascade`)
+All chaos-protected + rate-limited + sanitized. Sessions clamped 0-999.
+
+### 2.2 Redesigned GamesTab (game-specific sections)
+
+The old GamesTab showed the same 5 ML stat fields for every game. The new GamesTab is **game-specific** — sections render conditionally based on the selected game:
+
+| Section | When shown | What it manages |
+|---|---|---|
+| Game selector | always | pick minecraft/roblox/ml/dnd |
+| 1. Game metadata | always | title/subtitle/description/accent/carouselTitle (save on blur via PUT) |
+| 2. Moments/photos | always | upload screenshot (file+title+desc) + list with delete |
+| 3. ML player stats | **ML only** | role/favHero/rank/kda/winRate per member |
+| 4. D&D characters | **DnD only** | character CRUD (name/race/class/level per member) |
+| 5. D&D campaigns | **DnD only** | campaign CRUD (name/DM/status/sessions/description) |
+| 6. Compatibility | always | per-member × game level (—/RARE/CASUAL/MAIN) |
+
+Key design decisions:
+- **ML stats ONLY for ML** — `{selectedGame === "ml" && ...}`. Minecraft/Roblox don't have role/hero/KDA, so those fields are hidden. The user's concern "player stat tidak mungkin ada di seluruh game" is addressed.
+- **DnD characters + campaigns ONLY for DnD** — `{selectedGame === "dnd" && ...}`. These are DnD-specific data, not relevant to other games.
+- **Moments/photos for ALL games** — every game has screenshots. The upload uses `accept="image/jpeg,image/png,image/webp,image/gif"` on the file input (client-side hint) + the shared 3-layer server validation (defense-in-depth).
+- **Compatibility for ALL games** — the 0-3 level (—/RARE/CASUAL/MAIN) is game-agnostic, applies to every game.
+- **Section wrapper component** — `<Section title color icon>` for consistent styling. Each section has a distinct brand color (metadata=cyan, moments=orange, ML stats=lime, DnD chars=purple, DnD campaigns=red, compatibility=lime).
+
+## Section 3: Verification Results
+
+### Lint
+- ✅ `bun run lint` — 0 errors, 0 warnings
+
+### Dev server
+- ✅ Clean compile, no errors in dev.log
+
+### New API routes (curl)
+| Route | Method | Expected | Got |
+|---|---|---|---|
+| /api/games/moments?gameId=minecraft | GET | 200 | 200 ✅ |
+| /api/games/dnd-campaigns | GET | 200 | 200 ✅ |
+| /api/games/moments (no token) | POST | 403 | 403 ✅ |
+| /api/games/dnd-campaigns (no token) | POST | 403 | 403 ✅ |
+
+### Moment upload security (curl with chaos token)
+| Test | Expected | Got |
+|---|---|---|
+| Upload evil.svg | 400 extCheck | `Ekstensi .svg tidak diizinkan` ✅ |
+| Upload fake.png (svg content, .png ext) | 400 magicByte | `magic byte mismatch` ✅ |
+
+## Section 4: Key Decisions
+
+1. **Game-specific sections, not a single flat form**: The old GamesTab was a flat list of sections that all showed for every game. The new one uses `{selectedGame === "ml" && ...}` / `{selectedGame === "dnd" && ...}` conditionals so ML-specific fields only show for ML, DnD-specific fields only show for DnD. This directly addresses the user's concern that player stats can't be the same across all games.
+
+2. **Moments fetch URL changes with selectedGame**: `const momentsUrl = `/api/games/moments?gameId=${selectedGame}`` — when the user switches games, the useFetch hook re-fetches the moments for the newly selected game (the hook depends on the URL, so changing the URL triggers a re-fetch).
+
+3. **Shared validation reused for moments**: The `validateImageUpload()` utility (from Task 34) is reused for the new moments upload route. No new validation code — DRY. The same 3-layer defense (extension + content-type + magic-byte) applies to game screenshots.
+
+4. **DnDCampaign `include: { images: true }`**: The GET route includes related campaign images in the response, so the UI can show images per campaign without a separate fetch. The DnDCampaignImage model has `onDelete: Cascade` so deleting a campaign auto-deletes its images.
+
+5. **Section wrapper component**: Extracted a `<Section title color icon>` helper inside the GamesTab for consistent styling. Each section gets a distinct brand color + the section title. This makes the tab more organized ("rapih" as the user requested) — clear visual separation between metadata, photos, ML stats, DnD data, and compatibility.
+
+6. **Template literals written via Write tool, not bash**: The first attempt to splice the GamesTab used `python3 -c "..."` which passed through bash — bash mangled all `${...}` (expanded to empty) and `[m` (glob pattern). The file was broken. Fixed by writing the new GamesTab to a separate file via the Write tool (no bash interpretation), then splicing with a Python heredoc (`<< 'PYEOF'` with quoted delimiter = no bash expansion). Lesson: never pass JS template literals through `python3 -c "..."` — use a file + heredoc.
+
+## Section 5: Unresolved Issues / Risks / Next-phase Recommendations
+
+### Current Status: ✅ Task 35 Complete & Verified
+- Game moments (photos) API added — upload + list + delete with 3-layer image validation
+- DnD campaigns API added — full CRUD
+- GamesTab redesigned to be game-specific: ML stats only for ML, DnD characters/campaigns only for DnD, moments/photos for all games
+- All new routes chaos-protected + rate-limited + sanitized
+- Lint clean, all API routes verified, security tests pass
+
+### Known minor notes
+- The GamesTab player-stats "update" still uses delete+recreate (no PUT route for player-stats). Acceptable for the single-stat-per-member-per-game model.
+- The DnDCampaignImage management (uploading campaign location/scene photos) is not yet in the GamesTab UI — only the DnDCampaign records are managed. A future phase could add image upload per campaign.
+- The GamesTab wasn't E2E browser-tested because it requires the Konami code to access chaos-mode. Verified via: lint passes, dev server compiles, all games API routes return 200, moment upload security tests pass.
+
+### Next-phase recommendations (priority order)
+1. **Git push** — commit the game-specific GamesTab + moments/dnd-campaigns API.
+2. **DnDCampaignImage upload UI** — add a photo upload per campaign in the GamesTab (the schema + API route for DnDCampaignImage can be added).
+3. **GameMoment image preview lightbox** — click a moment to see it full-size.
+4. **DnD character stats editor** — the schema has str/dex/con/int/wis/cha per character, but the GamesTab only creates with name/race/class/level. Add a stat editor.
+5. **Seed games data** — populate Game, GameMoment, GamePlayerStat, GameCompatibility, DnDCharacter, DnDCampaign from the static data so the GamesTab has data to show/edit.
+
+Full work record: appended to `/home/z/my-project/worklog.md` (this section).

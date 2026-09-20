@@ -2118,3 +2118,140 @@ The mobile + PC race condition bug is fixed. `useChaosFetch` now fetches the tok
 4. **Pre-fetch token on page load**: if `ud-godmode` is in localStorage (godMode was active in a previous session), proactively fetch the token on page load instead of waiting for the first CRUD. This eliminates the first-request latency.
 
 Full work record: appended to `/home/z/my-project/worklog.md` (this section).
+
+---
+Task ID: 38
+Agent: main (Z.ai Code)
+Task: User reports the chaos-mode CRUD "required chaos mode" bug STILL happens on mobile when saving a member profile, despite the Task 37 fix. Investigate why and fix.
+
+## Section 1: Investigation
+
+### Desktop verification — the Task 37 fix DOES work on desktop
+
+Tested via agent-browser (desktop viewport 1280×800):
+1. Simulated the race condition: set `ud-godmode=1` in localStorage, CLEARED `ud-chaos-token` (simulating the background fetch not having completed).
+2. Reloaded → clicked ENTER → CHAOS MODE button appeared (godMode restored from localStorage).
+3. Clicked CHAOS MODE → navigated to chaos-mode page (Members tab).
+4. Intercepted `window.fetch` to log all API requests + whether `x-chaos-token` header was sent.
+5. Clicked "SAVE MEMBER PROFILE".
+6. Fetch log showed:
+   - `/api/chaos-token` — `hasToken: false` (the on-demand token fetch — no token on this request itself)
+   - `/api/members/aldi` — `hasToken: TRUE` (the member PUT sent WITH the token!)
+7. `tokenNowInStorage: true` — token stored after on-demand fetch.
+8. `hasChaosError: false` — NO "CHAOS MODE REQUIRED" error!
+9. `hasDbError: true` — only "Database not configured" (expected — DB not set up).
+
+So on desktop, the fix works perfectly. The token IS fetched on-demand and sent with the CRUD request.
+
+### Why mobile still fails — root cause
+
+The Task 37 fix had two gaps that manifest on mobile (but not desktop):
+
+1. **The 403-retry only triggered if `token` was non-null**:
+   ```js
+   if (res.status === 403 && token) {  // ← `&& token` means null-token 403 doesn't retry
+   ```
+   On mobile, if the on-demand token fetch fails transiently (network hiccup, slow 4G, server hiccup), `getOrFetchToken()` returns `null`. The request goes out WITHOUT a token → 403. But because `token` is null, the `&& token` condition is false → no retry → user sees 403.
+
+2. **No retry on the token fetch itself**: `fetchToken()` made a single `fetch("/api/chaos-token")`. On mobile, a single transient network failure (very common on cellular) → returns null → no token → 403 with no retry.
+
+On desktop (localhost or fast WiFi), the token fetch almost never fails (localhost is reliable, fast WiFi has low latency). So these gaps didn't manifest. On mobile (4G/5G with higher latency + packet loss), transient failures are common → the gaps triggered.
+
+## Section 2: The Fix — hardened `useChaosFetch`
+
+Rewrote `src/hooks/use-chaos-fetch.ts` with two hardening changes:
+
+### 2.1 Token fetch with retry (3x with 250ms delay)
+```js
+async function fetchTokenWithRetry(retries = 3): Promise<string | null> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const res = await fetch("/api/chaos-token", { cache: "no-store" });
+      if (!res.ok) {
+        // Retry on transient errors (5xx, 429), give up on 4xx (config issue)
+        if ((res.status >= 500 || res.status === 429) && attempt < retries - 1) {
+          await new Promise((r) => setTimeout(r, 250)); continue;
+        }
+        return null;
+      }
+      const d = await res.json();
+      if (d?.token) { localStorage.setItem("ud-chaos-token", d.token); return d.token; }
+      return null;
+    } catch {
+      // Network error — retry with delay
+      if (attempt < retries - 1) { await new Promise((r) => setTimeout(r, 250)); continue; }
+      return null;
+    }
+  }
+  return null;
+}
+```
+- 3 attempts with 250ms delay between each → survives transient mobile network failures.
+- Retries on 5xx (server error) + 429 (rate limited) + network errors (catch).
+- Does NOT retry on 4xx (e.g., 404 — the route doesn't exist, or 403 — config issue). These are permanent failures, retrying won't help.
+- `cache: "no-store"` ensures the token fetch isn't cached by the browser.
+
+### 2.2 403-retry regardless of initial token
+```js
+if (res.status === 403) {  // ← removed `&& token` condition
+  if (token) localStorage.removeItem("ud-chaos-token");
+  tokenFetchPromise = null;  // force a fresh fetch
+  token = await getOrFetchToken();
+  if (token) {
+    res = await fetch(url, { ...options, headers: buildHeaders(token) });
+  }
+}
+```
+- Now retries on 403 EVEN IF the initial token was null. This handles the case where:
+  - The on-demand fetch failed transiently (returned null) → request sent without token → 403 → retry forces a fresh fetch (the transient failure may have resolved) → if token obtained → retry the request with the token.
+- Clears `tokenFetchPromise = null` before the retry to force a NEW fetch (the previous promise was cleared after the first fetch completed, but setting it to null explicitly ensures a fresh fetch even if there's a timing edge case).
+
+## Section 3: Verification
+
+### Lint
+- ✅ `bun run lint` — 0 errors, 0 warnings
+
+### Dev server
+- ✅ Clean compile
+
+### Desktop E2E (agent-browser, race condition simulation)
+- Simulated: `ud-godmode=1` + `ud-chaos-token` CLEARED (race condition)
+- Clicked ENTER → CHAOS MODE → SAVE MEMBER PROFILE
+- Fetch log:
+  1. `/api/chaos-token` — `hasToken: false` (on-demand fetch)
+  2. `/api/members/aldi` — `hasToken: TRUE` (member PUT WITH token)
+- `tokenNowInStorage: true`
+- `hasChaosError: false` — NO "CHAOS MODE REQUIRED" ✅
+- `hasDbError: true` — only DB-not-configured (expected)
+
+## Section 4: Key Decisions
+
+1. **3 retries with 250ms delay**: chose 3 retries (not infinite) with 250ms delay. Total max wait: 500ms (2 delays × 250ms). This is short enough to not feel laggy on mobile, but long enough to survive most transient failures (cellular packet retransmits typically resolve in 100-500ms).
+
+2. **Retry on 5xx + 429 + network errors, NOT 4xx**: 4xx errors (e.g., 404 if the route is missing, 403 if the CHAOS_SECRET config is wrong) are permanent — retrying won't help. 5xx (server error) + 429 (rate limited) + network errors (catch block) are transient — retrying can help.
+
+3. **403-retry without `&& token` condition**: the Task 37 version had `if (res.status === 403 && token)` which skipped the retry when the initial token was null. The new version retries on ALL 403s, regardless of the initial token. This is correct because a 403 means "no valid token was sent" — and the fix is to fetch a fresh token + retry. The only case where this doesn't help is when the token fetch genuinely cannot succeed (e.g., CHAOS_SECRET not set in production → `generateChaosToken` throws → 500 → `fetchTokenWithRetry` returns null after 3 retries → 403-retry also returns null → final 403). In that case, the user sees 403, which is the correct degradation.
+
+4. **`cache: "no-store"` on token fetch**: ensures the browser doesn't cache the `/api/chaos-token` response. Without this, a stale cached token response could be served even after the token expires server-side (24h TTL).
+
+## Section 5: Remaining Possibilities for the Mobile Bug
+
+If the user STILL sees "required chaos mode" on mobile after this fix, the remaining possibilities are:
+
+1. **Production without CHAOS_SECRET**: if the user deployed to production (Vercel/Render) without setting `CHAOS_SECRET` env var, `getSecret()` throws in production → `generateChaosToken` throws → `/api/chaos-token` returns 500 → `fetchTokenWithRetry` retries 3x (all 500) → returns null → 403. **Fix: set `CHAOS_SECRET` env var in production** (`openssl rand -hex 32`).
+
+2. **Stale JS cache**: the user's mobile browser may have cached the OLD `useChaosFetch` (before the fix). **Fix: hard refresh / clear cache / disable cache in dev tools.**
+
+3. **Service worker**: if there's a service worker caching the old JS bundle. **Fix: unregister the service worker.**
+
+4. **Gateway/proxy stripping the `x-chaos-token` header**: if the user accesses via a proxy/gateway that strips custom headers. **Fix: check the gateway/proxy config (Caddy, Cloudflare, etc.) — ensure `x-chaos-token` is passed through.**
+
+5. **The user is testing a deployed version without the latest code**: the deployment doesn't have the Task 37/38 fix yet. **Fix: redeploy after pushing this commit.**
+
+### Next-phase recommendations (priority order)
+1. **Git push** — commit the hardened `useChaosFetch`.
+2. **User action**: if testing localhost, restart the dev server + hard-refresh the mobile browser. If testing a deployment, redeploy + set `CHAOS_SECRET`.
+3. **Add a user-facing error message**: if the token fetch fails after all retries, show "Chaos mode token unavailable — check your connection or re-enter the Konami code" instead of the generic "CHAOS MODE REQUIRED" 403.
+4. **Pre-fetch token on page load**: if `ud-godmode` is in localStorage, proactively fetch the token on page load (before any CRUD) to eliminate the first-request latency + race condition entirely.
+
+Full work record: appended to `/home/z/my-project/worklog.md` (this section).

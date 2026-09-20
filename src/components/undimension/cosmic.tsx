@@ -155,40 +155,59 @@ const FRAG = /* glsl */ `
       col = mix(col, c, edgeMask);
     }
 
-    // --- Lensed halo: the BACK of the disk, bent over the top and under the
-    //     bottom of the event horizon. This is the iconic Gargantua look.
-    //     We render it as a vertical-ring image of the disk AROUND the hole. ---
-    float haloR = length(d);  // actual screen distance from hole center
-    if (haloR > HOLE_R + 0.005 && haloR < DISK_IN + 0.04) {
-      // This ring is the lensed image of the disk's far side.
-      float haloAngle = atan(d.y, d.x) + uTime * 0.9;
-      float haloTemp = 1.0 - (haloR - (HOLE_R + 0.005)) / (DISK_IN - HOLE_R + 0.04);
-      haloTemp = clamp(haloTemp, 0.0, 1.0);
-      vec3 haloColor = mix(vec3(0.6, 0.1, 0.0), vec3(1.0, 0.7, 0.2), haloTemp);
-      haloColor = mix(haloColor, vec3(1.0, 0.92, 0.75), pow(haloTemp, 3.0));
-      float haloStreak = fbm(vec2(haloAngle * 9.0, haloR * 38.0));
-      haloColor *= 0.4 + 0.9 * haloStreak;
-      // The halo is brightest at top (lensing geometry concentrates there)
-      float topBoost = 0.4 + 0.9 * smoothstep(-0.3, 1.0, d.y);
-      haloColor *= topBoost;
-      // Doppler on the halo too (still left brighter)
-      haloColor *= 0.55 + 0.6 * dopplerSide;
-      col = mix(col, haloColor, 0.85);
-    }
-
-    // --- Event horizon (pure black sphere) ---
+    // --- Event horizon shadow (full circle, pure black) ---
+    // The "shadow" is the region where background light is captured by the
+    // hole. The top half will be covered by the lensed disk-back arc next,
+    // making the black region appear as a semicircle with a bright cap.
     if (length(d) < HOLE_R) {
       col = vec3(0.0);
     }
 
-    // --- Photon ring: a bright thin ring just outside the event horizon ---
+    // --- Lensed disk-back arc (the iconic Gargantua "cap") ---
+    // The disk's FAR side is bent UP and OVER the top of the shadow by the
+    // hole's gravity. From our viewpoint, this lensed light passes IN FRONT
+    // of the top half of the shadow — so the black region looks like a
+    // semicircle (bottom half visible) with a bright disk-arc cap on top.
+    // This is the "half-sphere merged with the ring" look the user described.
+    //
+    // The arc covers the top half (d.y > 0) within the shadow AND just
+    // outside it (up to HOLE_R + 0.06), forming a continuous bright ring
+    // that merges with the photon ring and the main equatorial disk.
+    float shadowDist = length(d);
+    if (d.y > 0.0 && shadowDist < HOLE_R + 0.07) {
+      // Lensed angular coordinate — slow orbital motion, same direction as disk
+      float lensAngle = atan(d.y, d.x) + uTime * 1.3;
+      // Temperature: hottest at the inner edge (closest to shadow) + very top
+      float lensTemp = 1.0 - smoothstep(0.0, HOLE_R + 0.07, shadowDist);
+      float topness = clamp(d.y / (HOLE_R + 0.04), 0.0, 1.0);
+      lensTemp *= 0.55 + 0.65 * topness;
+      vec3 lensColor = mix(vec3(0.7, 0.15, 0.0), vec3(1.0, 0.7, 0.25), lensTemp);
+      lensColor = mix(lensColor, vec3(1.0, 0.95, 0.8), pow(lensTemp, 2.5));
+      // Orbital turbulence streaks (matches the main disk's flow)
+      float lensStreak = fbm(vec2(lensAngle * 3.0, shadowDist * 30.0));
+      lensColor *= 0.5 + 0.85 * lensStreak;
+      // Doppler beaming on the lensed arc (left side brighter)
+      lensColor *= 0.55 + 0.7 * dopplerSide;
+      // Extra brightness at the very top (lensing concentrates light there)
+      lensColor *= 1.0 + 0.7 * pow(topness, 2.0);
+      // Smooth fade at the equator so it blends with the black bottom half
+      float equatorFade = smoothstep(0.0, 0.025, d.y);
+      // Fade out at the outer edge
+      float outerFade = 1.0 - smoothstep(HOLE_R + 0.02, HOLE_R + 0.07, shadowDist);
+      col = mix(col, lensColor, equatorFade * outerFade);
+    }
+
+    // --- Photon ring: bright thin ring at the edge of the shadow ---
     // This is the lensed image of light orbiting the hole at 1.5 * Rs.
-    float photonDist = abs(length(d) - HOLE_R - 0.008);
-    float photonRing = smoothstep(0.014, 0.0, photonDist);
-    col += photonRing * vec3(1.0, 0.92, 0.7) * 1.8;
+    // Brightest at the TOP where the lensed disk-back meets the shadow,
+    // dimmer at the bottom (which is just the shadow's lower edge).
+    float photonDist = abs(length(d) - HOLE_R - 0.006);
+    float photonRing = smoothstep(0.012, 0.0, photonDist);
+    float photonTopBoost = 0.4 + 1.4 * smoothstep(0.0, HOLE_R, max(d.y, 0.0));
+    col += photonRing * vec3(1.0, 0.92, 0.7) * photonTopBoost;
     // Outer soft glow on the photon ring
     float photonGlow = smoothstep(0.04, 0.0, abs(length(d) - HOLE_R - 0.012));
-    col += photonGlow * vec3(1.0, 0.7, 0.3) * 0.35;
+    col += photonGlow * vec3(1.0, 0.7, 0.3) * 0.4 * (0.5 + photonTopBoost * 0.5);
 
     // --- Final soft glow around the whole black hole ---
     float glow = exp(-length(d) * 3.5) * 0.18;

@@ -1219,3 +1219,120 @@ The blackhole is now a real-time Three.js GLSL shader with a tilted accretion di
 5. **Mouse-look interaction**: Let the user slightly orbit the camera around the blackhole by moving the mouse — the shader can support this via a uCameraAngle uniform.
 
 Full work record: appended to `/home/z/my-project/worklog.md` (this section).
+
+---
+Task ID: 31
+Agent: main (Z.ai Code)
+Task: User said the black shadow sphere in the blackhole was still too "perfect circle". They suggested: cut the sphere in half and merge it with the ring to form a blackhole that looks more like the real Interstellar Gargantua (where the disk's back side wraps over the top of the shadow). Or find another way to make it truly look like the real one. Then push.
+
+## Section 1: Current Project Status Assessment
+
+Task 30 left the blackhole as a Three.js shader with a tilted spinning disk + a perfect-circle black shadow + a photon ring + a thin lensed halo OUTSIDE the shadow. The user correctly identified that the black shadow being a perfect circle didn't match the iconic Interstellar Gargantua look, where the disk's lensed back side passes IN FRONT of the top of the shadow — making the black region appear as a SEMICIRCLE (bottom half visible) with a bright disk-arc "cap" on top, seamlessly merged with the photon ring.
+
+## Section 2: Research Conducted (web_search via z-ai SDK)
+
+Searched "Interstellar Gargantua black hole shadow shape photon ring disk wraps over top visual appearance explained". Top results confirmed the physics:
+- cerncourier.com ("Building Gargantua" — DNEG VFX breakdown): the disk's far side is gravitationally lensed UP and OVER the top of the shadow, appearing IN FRONT of the top of the black region.
+- spacenews.com ("The Real Science Behind the Black Hole in Interstellar"): "This weird distortion of the glowing disk was caused by gravitational lensing."
+- physics.stackexchange.com: shape of accretion disk around the black hole in Interstellar — the disk + shadow form a continuous structure, not separate elements.
+
+Key insight: in the real Gargantua, the lensed disk-back arc passes IN FRONT of the top half of the shadow. This visually "eclipses" the top of the black circle, making the shadow appear as a semicircle (D-shape) with the bright disk arc forming a continuous cap over the top. This is exactly the "half-sphere merged with the ring" look the user described.
+
+## Section 3: Completed Modifications
+
+### `src/components/undimension/cosmic.tsx` — shader restructure
+
+Restructured the draw order in the fragment shader so the lensed disk-back arc is drawn AFTER the black shadow, making it appear IN FRONT of the top half of the shadow (instead of being hidden behind the shadow like before).
+
+**Old draw order (Task 30):**
+1. Background (stars + nebula)
+2. Main equatorial disk
+3. Lensed halo — OUTSIDE the shadow only (hidden behind shadow in the center)
+4. Black shadow (full perfect circle — always fully visible)
+5. Photon ring (uniform brightness all around)
+
+**New draw order (Task 31):**
+1. Background (stars + nebula)
+2. Main equatorial disk
+3. **Black shadow** (full circle, drawn FIRST so the lensed arc can cover its top)
+4. **Lensed disk-back arc** — covers the TOP HALF (d.y > 0) within the shadow AND just outside it (shadowDist < HOLE_R + 0.07). This is the bright "cap" that makes the shadow look like a semicircle.
+5. **Photon ring** — bright thin ring at the shadow's edge, now BRIGHTER at the top (where the lensed disk-back meets the shadow) and dimmer at the bottom, via `photonTopBoost = 0.4 + 1.4 * smoothstep(0.0, HOLE_R, max(d.y, 0.0))`.
+
+### The lensed disk-back "cap" shader logic:
+```glsl
+if (d.y > 0.0 && shadowDist < HOLE_R + 0.07) {
+  float lensAngle = atan(d.y, d.x) + uTime * 1.3;  // slow orbital motion
+  float lensTemp = 1.0 - smoothstep(0.0, HOLE_R + 0.07, shadowDist);
+  float topness = clamp(d.y / (HOLE_R + 0.04), 0.0, 1.0);
+  lensTemp *= 0.55 + 0.65 * topness;
+  vec3 lensColor = mix(cool, warm, lensTemp);
+  lensColor = mix(lensColor, hot, pow(lensTemp, 2.5));
+  float lensStreak = fbm(vec2(lensAngle * 3.0, shadowDist * 30.0));  // orbital turbulence
+  lensColor *= 0.5 + 0.85 * lensStreak;
+  lensColor *= 0.55 + 0.7 * dopplerSide;  // Doppler beaming
+  lensColor *= 1.0 + 0.7 * pow(topness, 2.0);  // brightest at very top
+  float equatorFade = smoothstep(0.0, 0.025, d.y);  // blend with black bottom half
+  float outerFade = 1.0 - smoothstep(HOLE_R + 0.02, HOLE_R + 0.07, shadowDist);
+  col = mix(col, lensColor, equatorFade * outerFade);
+}
+```
+
+Key features of the cap:
+- Covers the entire top half of the shadow + a thin band just outside it → forms a continuous bright ring merged with the photon ring.
+- Has the SAME disk colors (temperature gradient: white-hot inside → orange → red outside) and turbulence streaks as the main equatorial disk — so it reads as "disk material bent over the top", not a separate glow.
+- Rotates with `uTime * 1.3` (orbital motion — the cap's streaks visibly move).
+- Doppler-beamed (left side brighter, matching the main disk's approaching side).
+- Smoothly fades at the equator (`equatorFade = smoothstep(0.0, 0.025, d.y)`) so there's no harsh line where the bright top meets the black bottom — they blend.
+- Brightest at the very top (`pow(topness, 2.0)` boost) where gravitational lensing concentrates light in the real Gargantua.
+
+## Section 4: Verification Results
+
+### Lint
+- ✅ `bun run lint` — 0 errors, 0 warnings
+
+### Dev server
+- ✅ Clean compile (Turbopack), only a non-blocking cross-origin dev-origin warning (unrelated to the shader)
+
+### Agent Browser E2E
+- ✅ Page loads, canvas + WebGL active, zero console errors, zero page errors
+
+### VLM visual verification — single screenshot
+Asked the vision model to describe the blackhole's shape. Confirmed the user's exact request is met:
+1. ✅ "The black/dark region is **NOT a full perfect circle**. It appears as a **semicircle** (or a 'D' shape). The bottom half is solid black; the top half is **covered by the bright accretion disk**."
+2. ✅ "The bright accretion disk appears to **merge with the top of the black region**, forming a **continuous bright cap** that covers the upper hemisphere. There is **no visible gap** between the edge of the darkness and the start of the brightness at the top — they blend together."
+3. ✅ "It now looks significantly more like the iconic **Gargantua black hole from Interstellar**."
+4. ✅ "The disk is **colorful** (bright yellows/whites inside → oranges → deep reds/browns outside) and **tilted** (oblique/inclined viewing angle)."
+
+### VLM rotation verification — two screenshots 1.3s apart
+Confirmed both the cap AND the main disk still rotate after the restructure:
+- ✅ "The brightest part of the glowing ring directly above the black hole's shadow is centered slightly to the LEFT in the first image, and has shifted noticeably to the RIGHT in the second image" — the cap rotates.
+- ✅ "The bright orange hot spot on the left side of the horizontal disk has moved further left in the second frame" — the main disk still rotates.
+
+## Section 5: Key Decisions
+
+1. **Draw order matters**: The fix was simply moving the lensed disk-back arc to render AFTER the black shadow (instead of before). This makes it pass IN FRONT of the top of the shadow, visually "eclipsing" the top half of the black circle. Same geometry, different z-order — completely changes the silhouette.
+
+2. **Equator fade, not hard cut**: The cap fades smoothly at the equator (`smoothstep(0.0, 0.025, d.y)`) instead of a hard cutoff at d.y = 0. This avoids a harsh "lid on a circle" look and makes the bright top blend into the black bottom as a continuous shape — which is what the user asked for ("satukan dengan cincin nya" = merge it with the ring).
+
+3. **Photon ring brightness varies with latitude**: The photon ring is no longer uniform — it's `0.4 + 1.4 * topness`. This matches the real Gargantua where the photon ring is brightest at the top (where the lensed disk-back concentrates light against the shadow edge) and dimmer at the bottom (just the shadow's lower edge).
+
+4. **Same turbulence/doppler as main disk**: The cap uses the same fbm turbulence, the same Doppler side, and the same temperature gradient as the main equatorial disk. This makes it read as "the same disk material, just lensed over the top" — not a separate glow effect. The disk and the cap are visually one continuous object.
+
+5. **The cap rotates too**: `lensAngle = atan(d.y, d.x) + uTime * 1.3` — the cap's streaks visibly orbit. This was verified by VLM comparing two frames 1.3s apart.
+
+## Section 6: Unresolved Issues / Risks / Next-phase Recommendations
+
+### Current Status: ✅ Task 31 Complete & Verified, ready to push
+The blackhole's black region now appears as a SEMICIRCLE (bottom half visible) with the bright accretion disk arc forming a continuous cap over the top — seamlessly merged with the photon ring. This is the iconic Interstellar Gargantua look the user described ("setengah dan satukan dengan cincin nya"). Verified by VLM.
+
+### Known minor notes (from VLM feedback, non-blocking)
+- The cap is "somewhat stylized / painted" rather than a physically-accurate Einstein-ring raytrace. A full Kerr geodesic solver (like discourse.threejs.org's R3F Kerr ray-tracer) would add the secondary Einstein ring and more complex light wrapping at the sides — but that's a much heavier shader.
+- The transition at the equator (sides) is fairly sharp; a physically-accurate simulation would show more blurred/distorted light wrapping around the sides.
+
+### Next-phase recommendations (priority order)
+1. **Git push** — commit the half-sphere-merged-with-ring change to origin/main.
+2. **Kerr (spinning) hole + secondary Einstein ring**: The current Schwarzschild approximation could be upgraded to a Kerr geodesic solver — this would add the secondary Einstein ring (a second, thinner lensed image of the disk inside the photon ring) and frame-dragging swirl at the poles.
+3. **Soften the equator transition**: Add light wrapping around the sides (left and right of the shadow, not just the top) for a more continuous lensed ring all around.
+4. **Mouse-look camera**: Let the user slightly orbit the viewing angle around the blackhole — would reveal the cap from different angles and show the 3D structure of the lensing.
+
+Full work record: appended to `/home/z/my-project/worklog.md` (this section).

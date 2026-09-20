@@ -1336,3 +1336,122 @@ The blackhole's black region now appears as a SEMICIRCLE (bottom half visible) w
 4. **Mouse-look camera**: Let the user slightly orbit the viewing angle around the blackhole — would reveal the cap from different angles and show the 3D structure of the lensing.
 
 Full work record: appended to `/home/z/my-project/worklog.md` (this section).
+
+---
+Task ID: 32
+Agent: main (Z.ai Code)
+Task: User said it's time to delete/hide the dummy member images and use the unavailable-photo state instead. ("sekarang terkait dengan unavailable foto, jadi sudah saatnya menghapus atau menghilangkan dummy image")
+
+## Section 1: Current Project Status Assessment
+
+The 7 members of the collective were:
+1. aldi (Aldi) — `/members/opening.webp` ❌ DUMMY (used a cover/placeholder image)
+2. razka (Rembo) — `/members/member-razka.webp` ✅ real photo
+3. reza (Eja) — `/members/member-reza.webp` ✅ real photo
+4. abyan (Byan) — `/members/member-abyan.webp` ✅ real photo
+5. rasya (Acong) — `/members/member-rasya.webp` ✅ real photo
+6. rifqi (Tipki) — `/members/member-razka.webp` ❌ DUMMY (reused razka's photo)
+7. dudit (Dudit) — `/members/member-reza.webp` ❌ DUMMY (reused reza's photo)
+
+3 members (aldi, rifqi, dudit) had dummy images. An `UnavailablePhoto` component already existed and was wired into `about-page.tsx` + `portfolio-page.tsx` (both already had `{m.img ? <img> : <UnavailablePhoto>}` conditionals). But the `img` field was never empty, so the unavailable state never showed. Additionally, `member-detail-modal.tsx` and `game-expander.tsx` `PlayerChip` rendered `<img src={member.img}>` directly with NO conditional — they would show broken images if `img` was empty.
+
+The `UnavailablePhoto` component itself was a minimal placeholder: a generic Lucide `AlertTriangle` icon + "NO PHOTO" text on a dark background. The user earlier asked for a "custom warning sign" — the generic icon wasn't custom enough.
+
+## Section 2: Completed Modifications
+
+### 2.1 `src/lib/undimension/data.ts` — MEMBERS array
+Set `img: ""` for the 3 dummy members:
+- `aldi` (line 63): `img: "/members/opening.webp"` → `img: ""`
+- `rifqi` (line 228): `img: "/members/member-razka.webp"` → `img: ""`
+- `dudit` (line 261): `img: "/members/member-reza.webp"` → `img: ""`
+
+### 2.2 `src/lib/undimension/game-details.ts` — MEMBER_IMGS map
+Set the same 3 entries to empty string:
+- `aldi: ""`, `rifqi: ""`, `dudit: ""`
+(The 4 real-photo members keep their paths.)
+
+### 2.3 `src/components/undimension/unavailable-photo.tsx` — full rewrite
+Replaced the generic Lucide `AlertTriangle` icon with a fully custom, on-brand neo-brutalist warning sign:
+- **Custom SVG warning triangle** — hand-drawn double-line triangle (outer 5px stroke + inner 2px accent at 50% opacity) with a stamped exclamation (rect bar + rect dot, not a Lucide icon). Themed by the member's brand color.
+- **Member color theming** — new `color` prop (hex string). All visual elements (triangle, borders, text, stamps, corner marks, diagonal stripes) use this color. Aldi=red #ff4d4d, Tipki=green #00ff00, Dudit=purple #8a2be2 — each member's unavailable card feels uniquely theirs.
+- **`nick` prop** — renders the member's nick as a stamped ID badge (`font-bebas` + bordered pill) so you immediately see WHO the missing photo belongs to.
+- **Microcopy** — "NO PHOTO" main label + "SIGNAL LOST" sub-microcopy (`text-white/40`, smaller tracking).
+- **Diagonal "NO SIGNAL" stripes** in the background (45° repeating-linear-gradient at 10% opacity) — like a TV test pattern / "off-air" aesthetic.
+- **Scanline texture overlay** (repeating-linear-gradient horizontal lines at 30% opacity) — CRT/viewfinder vibe.
+- **Corner registration marks** (L-shaped brackets in all 4 corners) — camera-viewfinder aesthetic, matches the rest of the site's `ud-corners` design language.
+- **ARIA** — `role="img"` + `aria-label` for screen readers.
+
+### 2.4 `src/components/undimension/member-detail-modal.tsx`
+- Imported `UnavailablePhoto`.
+- Wrapped the bare `<img src={member.img}>` in a `{member.img ? <img> : <UnavailablePhoto>}` conditional. Passes the member's brand color (extracted from the `color` Tailwind class via `member.color.match(/#[0-9a-fA-F]{6}/)`) and nick so the modal's unavailable card matches the member's identity.
+
+### 2.5 `src/components/undimension/game-expander.tsx` — `PlayerChip`
+- Imported `UnavailablePhoto`.
+- Wrapped the bare `<img src={p.img}>` in a `{p.img ? <img> : <UnavailablePhoto>}` conditional. Passes `p.color` (the player's brand color, already a hex string from `MEMBER_COLORS` in game-details.ts) and `p.nick`.
+
+### 2.6 `src/components/undimension/about-page.tsx` + `portfolio-page.tsx`
+- Both already had the `{m.img ? <img> : <UnavailablePhoto>}` conditional — just needed the `color` + `nick` props added so the unavailable card is themed by the member's brand color and shows the member's nick stamp. Now passes `color={(m.color.match(/#[0-9a-fA-F]{6}/) || ["#ff8c00"])[0]}` and `nick={m.nick}`.
+
+## Section 3: Verification Results
+
+### Lint
+- ✅ `bun run lint` — 0 errors, 0 warnings
+
+### Dev server
+- ✅ Clean compile
+
+### Agent Browser E2E — About page (THE COLLECTIVE)
+- ✅ Navigated ENTER → About page
+- ✅ DOM check: **4 real member photos** (Rembo/razka, Eja/reza, Byan/abyan, Acong/rasya — all have their real photos with correct `src`)
+- ✅ DOM check: **3 UnavailablePhoto divs** with labels:
+  - `"NO PHOTO — ALDI — Aldi"` (aldi, formerly `/members/opening.webp` dummy)
+  - `"NO PHOTO — TIPKI — Tipki"` (rifqi, formerly `/members/member-razka.webp` dummy)
+  - `"NO PHOTO — DUDIT — Dudit"` (dudit, formerly `/members/member-reza.webp` dummy)
+- ✅ VLM confirmed: Aldi card shows "red warning triangle icon, text 'NO PHOTO – ALDI' and 'SIGNAL LOST', and a box with the name 'ALDI'"
+
+### Agent Browser E2E — Member detail modal
+- ✅ Clicked Aldi's card → modal opened
+- ✅ `modalImgPresent: false` — NO `<img>` tag (because Aldi has no photo)
+- ✅ `unavailableInModal: "single"` — 1 UnavailablePhoto div in the modal
+- ✅ Modal text: `"ALDI NO PHOTO — ALDI SIGNAL LOST ALDI ID_ALDI · EST. 2020 ..."`
+
+### Agent Browser E2E — Game detail modal (Roblox)
+- ✅ Opened Roblox game detail modal — its 4 players are rasya, dudit, abyan, rifqi (2 real photos + 2 dummies)
+- ✅ `imgsInModal: 5` (Acong + Byan real photos + 3 moment screenshots)
+- ✅ `unavailableInModal: 2` — "NO PHOTO — Dudit" + "NO PHOTO — Tipki"
+- ✅ VLM confirmed the member-color theming:
+  - ACONG (rasya): real photo ✅
+  - DUDIT: unavailable state, **purple** themed (#8a2be2 — dudit's brand color) ✅
+  - BYAN (abyan): real photo ✅
+  - TIPKI (rifqi): unavailable state, **green** themed (#00ff00 — rifqi's brand color) ✅
+
+## Section 4: Key Decisions
+
+1. **Empty string `""` vs null/undefined**: Used `img: ""` (empty string) instead of making the field optional (`img?: string`). This keeps the `Member` type simple (no union) and the existing `{m.img ? ... : ...}` conditionals already treat `""` as falsy — no type changes needed across 6+ files that consume the Member type.
+
+2. **Member color extraction via regex**: The `Member.color` field is a Tailwind class like `bg-[#ff4d4d]`. Rather than adding a new `colorHex` field to all 7 members or maintaining a separate id→hex map, extract the hex inline via `member.color.match(/#[0-9a-fA-F]{6}/)`. The `|| ["#ff8c00"]` fallback handles any future member whose color class doesn't match. For game players, the `p.color` is already a hex string (from `MEMBER_COLORS` in game-details.ts), so no extraction needed.
+
+3. **Custom SVG warning sign, not a Lucide icon**: The user earlier asked for a "custom warning sign". The old `UnavailablePhoto` used `AlertTriangle` from lucide-react — a generic icon. The new one draws the triangle by hand in SVG (double-line brutalist stroke + stamped exclamation), themed by the member's brand color. It's on-brand with the site's `ud-corners` viewfinder aesthetic.
+
+4. **Member-color theming per card**: Each unavailable card is themed by the member's brand color — Aldi=red, Tipki=green, Dudit=purple. This means even the "no photo" cards feel unique to each member and match the rest of their card's color scheme (tape sticker, role badge, etc.). Verified by VLM: Dudit's unavailable state was correctly identified as purple, Tipki's as green.
+
+5. **"SIGNAL LOST" microcopy**: Adds a second line of microcopy below "NO PHOTO" to make the unavailable state feel like an in-world UI element (a broken signal / off-air TV aesthetic), not just an error. Matches the site's retro-terminal + viewfinder design language.
+
+6. **Game data left intact**: The GAMES section's `images` arrays (lines 376-414 in data.ts) use the 4 real member photos as game carousel screenshots — these are NOT member profile photos, they're game media. Left untouched. The GALLERY_PHOTOS g1 entry uses `/members/opening.webp` as an art piece "VISI AWAL" by Aldi — also left untouched (it's a gallery art piece, not a member profile photo). The `opening.webp` file stays in `/public/members/` for the gallery use.
+
+## Section 5: Unresolved Issues / Risks / Next-phase Recommendations
+
+### Current Status: ✅ Task 32 Complete & Verified
+All 3 dummy member images have been removed (set to empty string). The unavailable state now shows everywhere a member photo would render: About page member cards, member-detail-modal, portfolio-page author block, and game-expander PlayerChip. Each unavailable card is themed by the member's brand color and shows a custom hand-drawn warning triangle + "NO PHOTO" + "SIGNAL LOST" + the member's nick stamp. Verified by DOM checks + VLM on desktop.
+
+### Known minor notes
+- The `Member.img` field is still typed as `string` (not `string | undefined`). Setting it to `""` is the lightweight fix. If a future phase wants stricter typing, change to `img?: string` and update the ~6 consumer files.
+- The `opening.webp` file in `/public/members/` is still used by GALLERY_PHOTOS g1 ("VISI AWAL" by Aldi). Not deleted — it's a gallery art piece, not a member profile photo.
+
+### Next-phase recommendations (priority order)
+1. **Git push** — commit the dummy-image removal + enhanced unavailable state to origin/main.
+2. **Upload photo UI** — the chaos-mode-page MembersTab already has the form scaffolding (`setImg`, the `{img && <Preview>}` guard). Wire it to a real upload endpoint so members can set their own photo. The `/api/gallery/upload` route (sharp WebP) already exists and can be reused.
+3. **next/image for real member photos** — the 4 real photos still use raw `<img>`. Switch to `next/image` for responsive srcsets + blur placeholders.
+4. **Animated unavailable state** — add a subtle pulse or scanline animation to the unavailable card so it feels "alive" (like a broken signal), not static.
+
+Full work record: appended to `/home/z/my-project/worklog.md` (this section).

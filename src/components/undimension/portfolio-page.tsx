@@ -379,7 +379,11 @@ function MemberPortfolio({ member }: { member: Member }) {
                   />
                 ) : (
                   <div className="w-full aspect-[4/5]">
-                    <UnavailablePhoto label={`NO PHOTO — ${member.nick.toUpperCase()}`} />
+                    <UnavailablePhoto
+                      label={`NO PHOTO — ${member.nick.toUpperCase()}`}
+                      nick={member.nick}
+                      color={(member.color.match(/#[0-9a-fA-F]{6}/) || ["#ff8c00"])[0]}
+                    />
                   </div>
                 )}
                 <div className="absolute inset-2 ud-scanlines opacity-30 pointer-events-none" />

@@ -49,10 +49,10 @@ const MEMBER_COLORS: Record<string, string> = {
 };
 
 const MEMBER_IMGS: Record<string, string> = {
-  aldi: "/members/opening.webp", razka: "/members/member-razka.webp",
+  aldi: "", razka: "/members/member-razka.webp",
   reza: "/members/member-reza.webp", abyan: "/members/member-abyan.webp",
-  rasya: "/members/member-rasya.webp", rifqi: "/members/member-razka.webp",
-  dudit: "/members/member-reza.webp",
+  rasya: "/members/member-rasya.webp", rifqi: "",
+  dudit: "",
 };
 
 export const GAME_DETAILS: Record<string, GameDetail> = {

@@ -139,7 +139,11 @@ function MemberCard({ m, i, onOpen }: { m: Member; i: number; onOpen: () => void
                 />
               ) : (
                 <div className="w-full aspect-[4/5] md:aspect-[9/16]">
-                  <UnavailablePhoto label={`NO PHOTO — ${m.nick.toUpperCase()}`} />
+                  <UnavailablePhoto
+                    label={`NO PHOTO — ${m.nick.toUpperCase()}`}
+                    nick={m.nick}
+                    color={(m.color.match(/#[0-9a-fA-F]{6}/) || ["#ff8c00"])[0]}
+                  />
                 </div>
               )}
               <div className="absolute inset-0 ud-scanlines pointer-events-none" />

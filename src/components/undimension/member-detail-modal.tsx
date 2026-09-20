@@ -7,6 +7,7 @@ import type { Member } from "@/lib/undimension/data";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useSfx } from "@/hooks/use-sfx";
 import { cn } from "@/lib/utils";
+import { UnavailablePhoto } from "./unavailable-photo";
 
 export function MemberDetailModal({
   member,
@@ -116,11 +117,21 @@ export function MemberDetailModal({
               <div className="relative z-10 flex flex-col md:flex-row gap-6 items-center">
                 {/* Image */}
                 <div className="border-4 border-white bg-black p-2 shadow-[8px_8px_0_#000] flex-shrink-0 w-40 md:w-48">
-                  <img
-                    src={member.img}
-                    alt={member.nick}
-                    className="w-full aspect-[4/5] object-cover grayscale contrast-[1.4]"
-                  />
+                  {member.img ? (
+                    <img
+                      src={member.img}
+                      alt={member.nick}
+                      className="w-full aspect-[4/5] object-cover grayscale contrast-[1.4]"
+                    />
+                  ) : (
+                    <div className="w-full aspect-[4/5]">
+                      <UnavailablePhoto
+                        label={`NO PHOTO — ${member.nick.toUpperCase()}`}
+                        nick={member.nick}
+                        color={(member.color.match(/#[0-9a-fA-F]{6}/) || ["#ff8c00"])[0]}
+                      />
+                    </div>
+                  )}
                   <div className="absolute inset-0 ud-scanlines pointer-events-none" />
                 </div>
 

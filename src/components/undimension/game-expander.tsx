@@ -7,6 +7,7 @@ import { GAME_DETAILS, MEMBER_DND_STATS, DND_STAT_LABELS, type DnDStats } from "
 import { useSfx } from "@/hooks/use-sfx";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { cn } from "@/lib/utils";
+import { UnavailablePhoto } from "./unavailable-photo";
 
 function statModifier(score: number): string {
   const mod = Math.floor((score - 10) / 2);
@@ -41,7 +42,17 @@ function DnDStatBlock({ stats, color }: { stats: DnDStats; color: string }) {
 function PlayerChip({ p }: { p: any }) {
   return (
     <div className="border-2 border-white/20 bg-[#1a1a1a] p-3 flex items-center gap-4">
-      <img src={p.img} alt={p.nick} className="w-20 h-20 object-cover border-2 border-white/40 grayscale flex-shrink-0" loading="lazy" />
+      <div className="w-20 h-20 flex-shrink-0 overflow-hidden border-2 border-white/40">
+        {p.img ? (
+          <img src={p.img} alt={p.nick} className="w-full h-full object-cover grayscale" loading="lazy" />
+        ) : (
+          <UnavailablePhoto
+            label="NO PHOTO"
+            nick={p.nick}
+            color={p.color || "#ff8c00"}
+          />
+        )}
+      </div>
       <div className="flex-1 min-w-0">
         <div className="font-bebas text-2xl leading-none" style={{ color: p.color }}>{p.nick}</div>
         {p.role && <div className="font-mono-ud text-sm text-white/60 mt-1">{p.role} · {p.favHero}</div>}

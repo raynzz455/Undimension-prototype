@@ -781,3 +781,221 @@ body.modal-open nav {
 body.modal-open .ud-grain {
   z-index: 60;
 }
+
+/* ═────────────────────────────────────────════════════════════
+   REALISTIC 3D TESSERACT (Phase 17 — Task 29)
+   CSS 3D transforms, no Three.js. Two counter-rotating wireframe
+   cubes (outer + inner) form the classic 4D-hypercube projection.
+   The astronaut floats at the center with NO shadow / border / glow.
+   ═────────────────────────═══════════════════════════════════ */
+
+/* The 3D scene — provides perspective for its 3D-positioned children */
+.tesseract-scene {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  perspective: 1100px;
+  perspective-origin: 50% 50%;
+  transform-style: preserve-3d;
+}
+
+/* Each cube is a preserve-3d container with side S.
+   --half is S/2, used by both face transforms (translateZ) and
+   vertex transforms (translate3d ±half on each axis). */
+.tesseract-cube {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-style: preserve-3d;
+  pointer-events: none;
+  will-change: transform;
+}
+.tesseract-cube--outer {
+  --half: 100px;
+  width: 200px;
+  height: 200px;
+  margin: -100px 0 0 -100px;
+}
+.tesseract-cube--inner {
+  --half: 50px;
+  width: 100px;
+  height: 100px;
+  margin: -50px 0 0 -50px;
+}
+@media (min-width: 768px) {
+  .tesseract-cube--outer {
+    --half: 160px;
+    width: 320px;
+    height: 320px;
+    margin: -160px 0 0 -160px;
+  }
+  .tesseract-cube--inner {
+    --half: 80px;
+    width: 160px;
+    height: 160px;
+    margin: -80px 0 0 -80px;
+  }
+}
+
+/* Cube faces — transparent squares with glowing borders = wireframe edges.
+   Each face is positioned at top:0 left:0 (fills the cube container) then
+   pushed outward along its normal by --half via translateZ. */
+.tes-face {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 0 10px rgba(0, 229, 255, 0.45),
+    inset 0 0 12px rgba(0, 229, 255, 0.18);
+  backface-visibility: visible;
+  transition: border-color 0.5s ease, box-shadow 0.5s ease;
+}
+.group:hover .tes-face {
+  border-color: rgba(255, 77, 77, 0.95);
+  box-shadow:
+    0 0 14px rgba(255, 77, 77, 0.6),
+    inset 0 0 14px rgba(255, 77, 77, 0.25);
+}
+.tesseract-cube--inner .tes-face {
+  border-color: rgba(212, 255, 0, 0.9);
+  box-shadow:
+    0 0 10px rgba(212, 255, 0, 0.45),
+    inset 0 0 12px rgba(212, 255, 0, 0.18);
+}
+.group:hover .tesseract-cube--inner .tes-face {
+  border-color: rgba(0, 229, 255, 0.95);
+  box-shadow:
+    0 0 14px rgba(0, 229, 255, 0.6),
+    inset 0 0 14px rgba(0, 229, 255, 0.25);
+}
+
+/* Face transforms — same classes work for both cubes via --half */
+.tes-front  { transform: translateZ(var(--half)); }
+.tes-back   { transform: rotateY(180deg) translateZ(var(--half)); }
+.tes-right  { transform: rotateY(90deg)  translateZ(var(--half)); }
+.tes-left   { transform: rotateY(-90deg) translateZ(var(--half)); }
+.tes-top    { transform: rotateX(90deg)  translateZ(var(--half)); }
+.tes-bottom { transform: rotateX(-90deg) translateZ(var(--half)); }
+
+/* Glowing vertex nodes at the 8 cube corners.
+   p=+, n=- on each of X/Y/Z. They live INSIDE the cube so they
+   rotate together with the cube's spin. */
+.tes-vertex {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: var(--ud-cyan, #00e5ff);
+  box-shadow:
+    0 0 10px 2px rgba(0, 229, 255, 0.9),
+    0 0 22px 6px rgba(0, 229, 255, 0.4);
+  pointer-events: none;
+  animation: ud-vertex-pulse 2.4s ease-in-out infinite;
+}
+.tesseract-cube--inner .tes-vertex {
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  background: var(--ud-lime, #d4ff00);
+  box-shadow:
+    0 0 8px 2px rgba(212, 255, 0, 0.9),
+    0 0 18px 5px rgba(212, 255, 0, 0.4);
+}
+
+/* 8 corner transforms (outer cube uses --half=100/160, inner uses --half=50/80) */
+.tes-v-ppp { transform: translate3d(var(--half), var(--half), var(--half)); }
+.tes-v-ppn { transform: translate3d(var(--half), var(--half), calc(var(--half) * -1)); }
+.tes-v-pnp { transform: translate3d(var(--half), calc(var(--half) * -1), var(--half)); }
+.tes-v-pnn { transform: translate3d(var(--half), calc(var(--half) * -1), calc(var(--half) * -1)); }
+.tes-v-npp { transform: translate3d(calc(var(--half) * -1), var(--half), var(--half)); }
+.tes-v-npn { transform: translate3d(calc(var(--half) * -1), var(--half), calc(var(--half) * -1)); }
+.tes-v-nnp { transform: translate3d(calc(var(--half) * -1), calc(var(--half) * -1), var(--half)); }
+.tes-v-nnn { transform: translate3d(calc(var(--half) * -1), calc(var(--half) * -1), calc(var(--half) * -1)); }
+
+@keyframes ud-vertex-pulse {
+  0%, 100% { opacity: 0.7; transform-origin: center; }
+  50%      { opacity: 1; }
+}
+
+/* The astronaut — a plain floating image at the center of the tesseract.
+   NO shadow, NO border, NO background, NO border-radius, NO glow.
+   Just a gentle float animation to suggest drifting in zero gravity. */
+.tesseract-astronaut {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 110px;
+  height: 110px;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  /* Plain image — the float animation supplies the transform */
+  transform: translate(-50%, -50%);
+  z-index: 5;
+}
+@media (min-width: 768px) {
+  .tesseract-astronaut {
+    width: 170px;
+    height: 170px;
+  }
+}
+
+/* Gentle float — pure vertical bob + tiny rotation, like zero-gravity drift */
+@keyframes ud-tes-float {
+  0%, 100% { transform: translate(-50%, -50%) translateY(0)    rotate(-2deg); }
+  50%      { transform: translate(-50%, -50%) translateY(-10px) rotate(2deg); }
+}
+.animate-tes-float {
+  animation: ud-tes-float 6s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Outer cube spin — rotates around X and Y for a full 3D tumble */
+@keyframes ud-tes-spin {
+  0%   { transform: rotateX(0deg)   rotateY(0deg); }
+  100% { transform: rotateX(360deg) rotateY(360deg); }
+}
+.animate-tes-spin {
+  animation: ud-tes-spin 24s linear infinite;
+  will-change: transform;
+}
+
+/* Inner cube spin — counter-rotates at a different speed for parallax */
+@keyframes ud-tes-spin-rev {
+  0%   { transform: rotateX(0deg)    rotateY(0deg); }
+  100% { transform: rotateX(-360deg) rotateY(-360deg); }
+}
+.animate-tes-spin-rev {
+  animation: ud-tes-spin-rev 30s linear infinite;
+  will-change: transform;
+}
+
+/* ── Realistic Blackhole rotation (slow, counter-clockwise) ── */
+@keyframes ud-bh-rotate {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(-360deg); }
+}
+.animate-bh-rotate {
+  animation: ud-bh-rotate 60s linear infinite;
+  transform-origin: center;
+  will-change: transform;
+}
+
+/* Respect reduced motion for tesseract + blackhole */
+@media (prefers-reduced-motion: reduce) {
+  .animate-tes-spin,
+  .animate-tes-spin-rev,
+  .animate-tes-float,
+  .animate-bh-rotate,
+  .tes-vertex {
+    animation: none !important;
+  }
+}

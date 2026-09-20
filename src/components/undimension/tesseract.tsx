@@ -2,6 +2,23 @@
 
 import { cn } from "@/lib/utils";
 
+/**
+ * Realistic 3D Tesseract (4D hypercube projection).
+ *
+ * Built with CSS 3D transforms (transform-style: preserve-3d) — no Three.js
+ * needed, keeps the bundle light. Two counter-rotating wireframe cubes
+ * (outer + inner) + 16 glowing vertex nodes (8 outer + 8 inner) produce the
+ * classic "cube-within-a-cube" hypercube look.
+ *
+ * The astronaut image sits at the very center with NO shadow, NO border, NO
+ * circle, NO glow — it is a plain floating image, as if the astronaut is
+ * genuinely drifting, trapped inside the tesseract.
+ *
+ * Research sources:
+ *   - https://3dtransforms.desandro.com  (CSS 3D cube technique)
+ *   - https://developer.mozilla.org (transform-style: preserve-3d)
+ *   - https://css-tricks.com  (thinking in cubes, not boxes)
+ */
 export function Tesseract({
   image,
   onEnter,
@@ -11,7 +28,11 @@ export function Tesseract({
 }) {
   return (
     <div
-      className="relative w-[200px] h-[200px] md:w-[350px] md:h-[350px] flex items-center justify-center group cursor-pointer z-20 mt-8 mb-12 no-color-transition animate-intro-zoom"
+      className={cn(
+        "relative w-[260px] h-[260px] md:w-[400px] md:h-[400px]",
+        "flex items-center justify-center cursor-pointer z-20 mt-4 mb-28 md:mb-20",
+        "no-color-transition animate-intro-zoom group",
+      )}
       onClick={onEnter}
       role="button"
       tabIndex={0}
@@ -23,54 +44,62 @@ export function Tesseract({
       }}
       aria-label="Enter Undimension"
     >
-      {/* Outer rotating square — wireframe tesseract */}
-      <svg
-        className="absolute inset-0 w-full h-full animate-spin-slow"
-        viewBox="0 0 200 200"
-        style={{ willChange: "transform" }}
-      >
-        {/* Outer square */}
-        <rect
-          x="15" y="15" width="170" height="170"
-          fill="none" stroke="#ffffff" strokeWidth="4"
-          className="group-hover:stroke-[#ff4d4d] transition-colors duration-500"
-        />
-        {/* Inner square */}
-        <rect
-          x="50" y="50" width="100" height="100"
-          fill="none" stroke="#ffffff" strokeWidth="4"
-          className="group-hover:stroke-[#00e5ff] transition-colors duration-500"
-        />
-        {/* Connecting lines — tesseract edges */}
-        <line x1="15" y1="15" x2="50" y2="50" stroke="#ffffff" strokeWidth="4" className="group-hover:stroke-[#d4ff00] transition-colors duration-500" />
-        <line x1="185" y1="15" x2="150" y2="50" stroke="#ffffff" strokeWidth="4" className="group-hover:stroke-[#d4ff00] transition-colors duration-500" />
-        <line x1="15" y1="185" x2="50" y2="150" stroke="#ffffff" strokeWidth="4" className="group-hover:stroke-[#d4ff00] transition-colors duration-500" />
-        <line x1="185" y1="185" x2="150" y2="150" stroke="#ffffff" strokeWidth="4" className="group-hover:stroke-[#d4ff00] transition-colors duration-500" />
-        {/* Corner dots */}
-        <circle cx="15" cy="15" r="5" fill="#ff4d4d" />
-        <circle cx="185" cy="15" r="5" fill="#00e5ff" />
-        <circle cx="15" cy="185" r="5" fill="#d4ff00" />
-        <circle cx="185" cy="185" r="5" fill="#ff00ff" />
-      </svg>
+      {/* 3D scene — provides perspective for the cubes inside */}
+      <div className="tesseract-scene">
+        {/* Outer wireframe cube — rotates one way */}
+        <div className="tesseract-cube tesseract-cube--outer animate-tes-spin">
+          {/* 6 transparent faces with glowing borders = wireframe edges */}
+          <div className="tes-face tes-front" />
+          <div className="tes-face tes-back" />
+          <div className="tes-face tes-right" />
+          <div className="tes-face tes-left" />
+          <div className="tes-face tes-top" />
+          <div className="tes-face tes-bottom" />
+          {/* 8 glowing vertex nodes on the outer cube corners */}
+          <div className="tes-vertex tes-v-ppp" />
+          <div className="tes-vertex tes-v-ppn" />
+          <div className="tes-vertex tes-v-pnp" />
+          <div className="tes-vertex tes-v-pnn" />
+          <div className="tes-vertex tes-v-npp" />
+          <div className="tes-vertex tes-v-npn" />
+          <div className="tes-vertex tes-v-nnp" />
+          <div className="tes-vertex tes-v-nnn" />
+        </div>
 
-      {/* Center image container — counter-rotating */}
-      <div
-        className="absolute w-[100px] h-[100px] md:w-[160px] md:h-[160px] flex items-center justify-center bg-[#09090b] border-4 border-white shadow-[6px_6px_0_#fff] overflow-hidden animate-spin-rev group-hover:scale-110 transition-transform rounded-full"
-        style={{ willChange: "transform" }}
-      >
+        {/* Inner wireframe cube — counter-rotates (gives the hypercube feel) */}
+        <div className="tesseract-cube tesseract-cube--inner animate-tes-spin-rev">
+          <div className="tes-face tes-front" />
+          <div className="tes-face tes-back" />
+          <div className="tes-face tes-right" />
+          <div className="tes-face tes-left" />
+          <div className="tes-face tes-top" />
+          <div className="tes-face tes-bottom" />
+          {/* 8 smaller glowing vertex nodes on the inner cube corners */}
+          <div className="tes-vertex tes-v-ppp" />
+          <div className="tes-vertex tes-v-ppn" />
+          <div className="tes-vertex tes-v-pnp" />
+          <div className="tes-vertex tes-v-pnn" />
+          <div className="tes-vertex tes-v-npp" />
+          <div className="tes-vertex tes-v-npn" />
+          <div className="tes-vertex tes-v-nnp" />
+          <div className="tes-vertex tes-v-nnn" />
+        </div>
+
+        {/* Astronaut — plain image, no shadow, no border, no circle.
+            Just floating gently in the middle of the tesseract, as if
+            genuinely drifting, trapped inside the hypercube. */}
         <img
           src={image}
-          alt="Astronaut"
-          className="w-full h-full object-cover rounded-full"
+          alt="Astronaut adrift inside the tesseract"
+          className="tesseract-astronaut animate-tes-float"
           loading="eager"
+          draggable={false}
         />
-        {/* Glow ring */}
-        <div className="absolute inset-0 rounded-full pointer-events-none" style={{ boxShadow: "inset 0 0 20px rgba(0, 229, 255, 0.3)" }} />
       </div>
 
       {/* ENTER button */}
       <button
-        className="absolute -bottom-14 -right-2 md:-right-10 bg-[#d4ff00] text-black font-bebas text-3xl md:text-5xl px-8 py-3 border-4 border-white shadow-[6px_6px_0_#fff] rotate-3 flex items-center gap-2 group-hover:bg-white group-hover:-translate-y-1 group-hover:-translate-x-1 group-hover:shadow-[12px_12px_0_#ff4d4d] transition-all no-color-transition"
+        className="absolute -bottom-12 -right-2 md:-right-10 bg-[#d4ff00] text-black font-bebas text-3xl md:text-5xl px-8 py-3 border-4 border-white shadow-[6px_6px_0_#fff] rotate-3 flex items-center gap-2 group-hover:bg-white group-hover:-translate-y-1 group-hover:-translate-x-1 group-hover:shadow-[12px_12px_0_#ff4d4d] transition-all no-color-transition z-30"
         onClick={(e) => {
           e.stopPropagation();
           onEnter();

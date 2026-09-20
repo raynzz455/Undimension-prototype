@@ -976,3 +976,124 @@ Task: Fix 5 user-reported issues — achievement photo prominence, dark mode rea
 4. **next/image optimization** — Still using raw `<img>` for member photos and achievement images. Should switch to `next/image` for automatic WebP/AVIF conversion and responsive srcsets.
 
 Full work record: `/agent-ctx/28-main-z-ai-code.md`
+
+---
+Task ID: 29
+Agent: main (Z.ai Code)
+Task: Redesign opening-page tesseract + blackhole to be realistic; astronaut must float freely inside the tesseract with NO shadow/border/glow (plain image), as if genuinely trapped. Use web search / library to make the tesseract AND blackhole realistic.
+
+## Section 1: Current Project Status Assessment
+
+User's request (Indonesian): "untuk design yang menggunakan astronout — Jangan dibuat memiliki shadow atau apapun, biarkan normal gambar, aku ingin seolah olah memang astronout tersebut melayang layang terjebak di tesseract. gunakan pencarian atau cari informasi di internet sendiri atau penggunaan library untuk membuat tesseract dan juga blackhole agar realistis"
+
+Translation: For the astronaut design — don't give it any shadow or anything, let the image be plain. I want it as if the astronaut is genuinely floating, trapped inside the tesseract. Use web search or a library to make the tesseract AND the blackhole realistic.
+
+Prior state (Task 28 left the opening screen with):
+- Tesseract = a flat 2D SVG: two squares (outer + inner) with 4 connecting lines, all spinning as one unit. The center image was in a circular container with `bg-[#09090b] border-4 border-white shadow-[6px_6px_0_#fff] rounded-full` + an inset cyan glow ring. NOT a real 3D tesseract, and the astronaut had heavy shadow/border/circle.
+- Blackhole = a flat 2D SVG: a yellow ellipse + red circle + black disc + cyan arc. Recognizable but cartoony, not the iconic Interstellar "Gargantua" look.
+
+## Section 2: Research Conducted (web_search via z-ai SDK)
+
+Two web searches were performed to pick the best rendering approach:
+1. **Tesseract/hypercube**: searched "CSS 3D rotating wireframe cube tesseract hypercube projection transform-style preserve-3d". Top results: 3dtransforms.desandro.com (CSS 3D cube technique), MDN (transform-style: preserve-3d), css-tricks.com (thinking in cubes), dev.to (coding a 3D cube in pure CSS). Conclusion: **CSS 3D transforms with `transform-style: preserve-3d` + `perspective`** is the proven, lightweight approach — no Three.js needed (the project is already memory-constrained per prior worklog notes about NODE_OPTIONS=--max-old-space-size=512).
+2. **Blackhole**: searched "realistic black hole accretion disk gravitational lensing CSS SVG effect interstellar gargantua". Top results: cerncourier.com ("Building Gargantua" — Interstellar VFX breakdown), svs.gsfc.nasa.gov (Black Hole with Accretion Disk Visualization), eventhorizontelescope.org (real M87 morphology). Conclusion: an **SVG with radial gradients + Gaussian blur filters** can reproduce the Gargantua look (edge-on disk + top lensing halo + photon ring + Doppler beaming) without any external library.
+
+## Section 3: Completed Modifications
+
+### 3.1 `src/components/undimension/tesseract.tsx` (full rewrite)
+- Removed the old flat 2D SVG approach entirely.
+- New structure is a real CSS 3D scene:
+  - `.tesseract-scene` (provides `perspective: 1100px`)
+  - `.tesseract-cube--outer` (200px mobile / 320px desktop, `--half: 100px/160px`) — 6 transparent faces with glowing white-cyan wireframe borders, counter-rotating via `animate-tes-spin` (24s rotateX+rotateY)
+  - `.tesseract-cube--inner` (100px mobile / 160px desktop, `--half: 50px/80px`) — 6 transparent faces with glowing lime-yellow borders, counter-rotating via `animate-tes-spin-rev` (30s reverse rotateX+rotateY)
+  - 8 glowing cyan vertex nodes on the outer cube corners + 8 smaller glowing lime vertex nodes on the inner cube corners (16 total) — positioned via `translate3d(±half, ±half, ±half)` and living INSIDE each cube so they rotate together with the cube. This is the signature "cube-within-a-cube with connected vertices" hypercube look.
+  - `.tesseract-astronaut` — the astronaut image at the center. **NO shadow, NO border, NO background, NO border-radius, NO glow.** Just `object-fit: contain` + a gentle 6s float animation (4px vertical bob + tiny ±2deg rotation) to suggest zero-gravity drift.
+- The ENTER button kept its neo-brutalist lime box style.
+- Responsive: mobile 260×260 scene (cubes 200/100), desktop 400×400 scene (cubes 320/160). Container bottom margin bumped to `mb-28 md:mb-20` so the absolutely-positioned ENTER button doesn't visually crowd the "INITIATE LAUNCH SEQUENCE" banner below on mobile (verified 54px gap on 390px viewport).
+
+### 3.2 `src/components/undimension/cosmic.tsx` — `Blackhole` (full rewrite)
+Replaced the old flat SVG with a realistic Interstellar-Gargantua-inspired rendering. The SVG (viewBox 0 0 500 500) is layered in this exact z-order to reproduce gravitational lensing:
+1. **Faint background nebula halo** — `circle r=245` filled with the hot disk radial gradient at 12% opacity, blurred with `stdDeviation=14`. This is the gravity-well glow.
+2. **Bottom lensing arc** — `path` (quadratic Bézier from (55,250) to (445,250) dipping to (250,460)) stroked with the hot disk gradient, 24px wide, 60% opacity. This is the light from the BACK of the disk bent UNDER the hole (dimmer than the top because of viewing angle).
+3. **Black event-horizon sphere** — `circle r=105` filled with a radial gradient that's pure black in the center and gains a faint purple (`#1a0033`) gravitational-edge tint at the rim (96–100%).
+4. **Photon ring** — two concentric thin rings just outside the horizon: `r=108 stroke=white 1.5px` (the bright photon sphere) + `r=113 stroke=#fff4c2 1px` (soft outer glow), both filtered through the soft-glow Gaussian blur.
+5. **Top lensing arc** — `path` (Bézier from (55,250) to (445,250) arching to (250,40)) stroked with the hot disk gradient, 30px wide, 95% opacity. PLUS a brighter inner arc (`#ffffff`, 4px, 85% opacity). This is the iconic light-from-the-back-of-the-disk bent OVER the top (drawn AFTER the sphere so it appears in front of the top of the black hole).
+6. **Edge-on accretion disk in front** — two `ellipse`s extending left + right of the photon ring (cx=150 and cx=350, rx=100, ry=13), filled with a Doppler asymmetry linear gradient (left=white-hot blueshift, right=red dim redshift). Left ellipse at 95% opacity (bright, approaching), right at 55% opacity (dim, receding). Plus a bright hot-spot ellipse on the approaching side. All wrapped in a `motion` filter (`stdDeviation=1.5 0.4`) to imply orbital speed.
+- The whole SVG slowly counter-rotates via `animate-bh-rotate` (60s, -360deg) so the disk + halo feel alive.
+
+### 3.3 `src/app/globals.css` — appended ~220 lines of new CSS
+- `.tesseract-scene` (perspective + preserve-3d)
+- `.tesseract-cube` + `--outer`/`--inner` modifiers (use CSS custom property `--half` = S/2 so the same face transform classes work for both cubes)
+- `.tes-face` (transparent square + glowing border = wireframe edge), with hover variants that shift the outer cube to red and the inner cube to cyan on `group:hover`
+- `.tes-front/back/right/left/top/bottom` face transforms using `translateZ(var(--half))` + rotations
+- `.tes-vertex` glowing corner node + 8 corner transforms `.tes-v-ppp` … `.tes-v-nnn` using `translate3d(±half, ±half, ±half)` (calc(var(--half) * -1) for the negative axis)
+- `.tesseract-astronaut` — the plain floating image (no shadow/border/radius/glow)
+- Keyframes: `ud-tes-spin`, `ud-tes-spin-rev`, `ud-tes-float`, `ud-vertex-pulse`, `ud-bh-rotate`
+- A reduced-motion block that disables all tesseract/blackhole animations for users with `prefers-reduced-motion: reduce`
+
+## Section 4: Verification Results
+
+### Lint
+- ✅ `bun run lint` — 0 errors, 0 warnings
+
+### Dev server
+- ✅ Clean restart, no compile errors in `dev.log`
+
+### Agent Browser E2E (desktop 1280×800)
+- ✅ Page loads, title "UNDIMENSION — Circle Beyond Space & Time"
+- ✅ DOM verified:
+  - `.tesseract-scene` present, `perspective: 1100px`, `perspective-origin: 200px 200px`
+  - `.tesseract-cube--outer` present, `transform-style: preserve-3d`, `animation-name: ud-tes-spin`, `animation-duration: 24s`
+  - 6 outer faces + 8 outer vertices, 6 inner faces + 8 inner vertices (all present)
+  - `.tesseract-astronaut` present, `src="/assets/Astronout.png"`, classes `tesseract-astronaut animate-tes-float`
+  - **Astronaut computed style: `box-shadow: none`, `border: 0px solid ...`, `border-radius: 0px`, `background: rgba(0,0,0,0)` — confirms NO shadow/border/radius/glow**
+  - `.animate-bh-rotate` SVG present with `viewBox="0 0 500 500"`
+- ✅ Zero console errors, zero page errors
+
+### Agent Browser E2E (mobile 390×844)
+- ✅ Tesseract scene 260×260, `--half: 100px` (mobile value), `transform-style: preserve-3d`, `perspective: 1100px`
+- ✅ ENTER button + banner: 54px gap between button bottom (y=537) and banner top (y=591) — NO overlap
+- ✅ Tesseract + astronaut + blackhole all render correctly on mobile
+
+### VLM (vision model) visual verification
+Asked the vision model to describe the rendered opening screen. Confirmed:
+1. ✅ "a larger cyan/blue outer wireframe cube and a smaller, glowing yellow inner wireframe cube" — tesseract visible
+2. ✅ "a plain, flat illustration of an astronaut with no shadow, border, or circular background around it—just the figure itself positioned inside the wireframe structure" — astronaut floating plain, no effects
+3. ✅ "a dark central void surrounded by a bright orange and yellow accretion disk. There is also a distinct glowing white/light arc or halo effect curving over the top of the black hole, similar to the Interstellar Gargantua style" — realistic blackhole
+4. ✅ "the title UNDIMENSION is clearly visible at the very top of the screen in large, bold, white letters with a cyan outline"
+
+### Golden-path interactivity
+- ✅ Clicking ENTER (ref @e9) navigates from the opening screen to the About page
+- ✅ About page shows "WE ARE UNDIMENSION", "THE MISSION", "WHO WE ARE" headings, navbar present
+- ✅ Zero errors during navigation
+
+## Section 5: Key Decisions
+
+1. **CSS 3D transforms vs Three.js**: Chose CSS 3D transforms (`transform-style: preserve-3d` + `perspective`) over Three.js. The project is already memory-constrained (NODE_OPTIONS=--max-old-space-size=512 to prevent OOM kills on the sandbox). Three.js would add ~600KB to the bundle and a WebGL context. CSS 3D transforms give the same visual result for a wireframe tesseract at a fraction of the cost, and they're GPU-accelerated via `will-change: transform`.
+
+2. **Two cubes, not 32 edges**: A true tesseract has 32 edges (12 outer + 12 inner + 8 connectors). The connector edges require 8 different 3D rotations to orient a thin div along each cube diagonal — mathematically elegant but verbose and fragile. Instead, I render two counter-rotating wireframe cubes (12+12=24 edges via the face borders) + 16 glowing vertex nodes (8 outer cyan + 8 inner lime). This reads unmistakably as a "tesseract" while staying maintainable. The vertices give the "connected corners" signature look without the connector-edge math.
+
+3. **CSS custom property `--half` for cube half-side**: Both the outer cube (200px → --half: 100px) and inner cube (100px → --half: 50px) use the SAME face transform classes (`.tes-front { transform: translateZ(var(--half)); }`) because each cube sets its own `--half`. This halves the CSS. The 8 vertex transforms use `translate3d(±var(--half), ±var(--half), ±var(--half))` with `calc(var(--half) * -1)` for negative axes. Resolved correctly by Lightning CSS.
+
+4. **Astronaut = plain image, no effects**: Per the user's explicit instruction, the astronaut has NO box-shadow, NO border, NO background, NO border-radius, NO glow filter. Verified via `getComputedStyle()`: `box-shadow: none`, `border: 0px`, `border-radius: 0px`, `background: rgba(0,0,0,0)`. The only animation is a gentle 6s float (4px vertical bob + ±2deg rotation) to suggest zero-gravity drift, which the user requested ("melayang layang" = floating/drift).
+
+5. **Blackhole z-order = lensing reproduction**: The Interstellar Gargantua look requires a specific draw order: background glow → bottom lensing arc → black sphere → photon ring → top lensing arc → edge-on disk. The top arc is drawn AFTER the sphere so it appears in front of the top of the black hole (the light from the back of the disk bent over the top). The edge-on disk is drawn LAST so it's in front of everything in the equatorial plane. Doppler beaming is faked with a left-bright/right-dim linear gradient + a hot-spot ellipse on the approaching side.
+
+## Section 6: Unresolved Issues / Risks / Next-phase Recommendations
+
+### Current Status: ✅ Task 29 Complete & Verified
+The opening screen now shows a realistic 3D wireframe tesseract (two counter-rotating cubes + 16 glowing vertices) with the astronaut floating plain (no shadow/border/glow) at the center, plus a realistic Interstellar-Gargantua-style black hole on the right with an accretion disk, gravitational-lensing halo arc over the top, photon ring, and Doppler-beamed disk. Lint clean, zero console errors, verified on desktop + mobile + golden-path ENTER navigation.
+
+### Known minor notes
+- The vertex glow divs use `animation: ud-vertex-pulse` which only animates opacity (not transform) — this is intentional so the vertex transform (translate3d) isn't clobbered by the pulse animation.
+- Lightning CSS strips the `transform-origin` from individual keyframes but keeps it on the rule — `transform-origin: center` is on `.animate-bh-rotate` (the rule), not in the `ud-bh-rotate` keyframes, so rotation is around the SVG center.
+- The 8 connector edges of a true tesseract (between outer and inner corners) are NOT drawn — the two cubes + 16 vertex glows produce the unmistakable tesseract silhouette without them. If a future phase wants the full 32-edge tesseract, the 8 connector divs would each need a 3D rotation computed from the cube diagonal direction (sx, sy, sz)/√3.
+
+### Next-phase recommendations (priority order)
+1. **Astro float parallax with mouse**: Make the astronaut's float respond slightly to mouse position (parallax) so it feels even more "trapped" inside the tesseract.
+2. **Tesseract edge connectors (optional)**: Render the 8 diagonal connector edges between outer and inner cube corners for the full 32-edge hypercube. Requires computing 8 3D rotations.
+3. **Blackhole shader upgrade**: If more realism is wanted, swap the SVG blackhole for a Three.js shader (e.g. the open-source "BlackHoleDemo" raymarcher) — but this adds a WebGL context and ~600KB. Only do this if the user explicitly wants photorealism.
+4. **Sound design**: Add a low ambient drone when the tesseract is hovered, and a "whoosh" on ENTER.
+5. **next/image for astronaut**: Switch the astronaut `<img>` to `next/image` for responsive srcset + blur placeholder (currently raw `<img>`).
+
+Full work record: appended to `/home/z/my-project/worklog.md` (this section).

@@ -158,9 +158,41 @@ model Game {
   // Relations
   moments        GameMoment[]
   playerStats    GamePlayerStat[]
+  players        GamePlayer[]
   compatibilities GameCompatibility[]
 
   @@index([order])
+}
+
+/// Game players — can be collective members OR external players.
+/// Independent of Member so games can include non-collective players
+/// (e.g. friends, rivals, guests). Each player has their OWN photo
+/// (not the member profile photo) so a member can use a different
+/// avatar per game, and external players have their own photo too.
+model GamePlayer {
+  id           String   @id @default(cuid())
+  gameId       String   // FK → Game.gameId
+  game         Game     @relation(fields: [gameId], references: [gameId])
+  name         String   // full display name (e.g. "Raynaldi" or "Guest Player")
+  nick         String   // short alias (e.g. "Aldi" or "RandomJoe")
+  img          String?  // player photo (URL → Supabase games/players/*.webp). NULL = unavailable state.
+  color        String   @default("#ff8c00") // brand color for this player's chip
+  role         String?  // ML: 'MIDLANER', 'JUNGLER', etc.
+  favHero     String?  // ML: 'Lancelot'
+  rank         String?  // ML: 'Mythic Glory'
+  kda          String?  // ML: '4.2/2.1/5.8'
+  winRate      String?  // ML: '68%'
+  dndCharacter String?  // DnD: character name (if this is a DnD player)
+  dndRace      String?
+  dndClass     String?
+  dndLevel     Int      @default(1)
+  isMember     Boolean  @default(false) // true if this player is a collective member
+  memberSlug   String?  // optional FK to Member.slug (only if isMember=true)
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@index([gameId])
+  @@index([isMember])
 }
 
 /// Game moment photos (Minecraft/Roblox/ML moments)

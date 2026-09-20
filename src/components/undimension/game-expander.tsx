@@ -6,6 +6,7 @@ import { X, Users, Image as ImageIcon, Sword, Shield, Crown, MapPin, ChevronLeft
 import { GAME_DETAILS, MEMBER_DND_STATS, DND_STAT_LABELS, type DnDStats } from "@/lib/undimension/game-details";
 import { useSfx } from "@/hooks/use-sfx";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
+import { useFetch } from "@/hooks/use-fetch";
 import { cn } from "@/lib/utils";
 import { UnavailablePhoto } from "./unavailable-photo";
 
@@ -81,6 +82,13 @@ export function GameDetailModal({
   useFocusTrap(panelRef, open);
   const { play } = useSfx();
   const detail = GAME_DETAILS[gameId];
+
+  // Fetch DB players for this game (supports external players with own photos).
+  // Falls back to static GAME_DETAILS players if DB unconfigured/empty.
+  const playersUrl = gameId ? `/api/games/players?gameId=${gameId}` : "";
+  const { data: dbPlayersData } = useFetch<{ players: any[] }>(playersUrl);
+  const dbPlayers = dbPlayersData?.players ?? [];
+  const players = dbPlayers.length > 0 ? dbPlayers : (detail?.players ?? []);
 
   useEffect(() => {
     if (open) {
@@ -161,10 +169,10 @@ export function GameDetailModal({
               {/* Players */}
               <div>
                 <h4 className="font-bebas text-4xl text-white mb-3 flex items-center gap-2 border-b-2 border-white/20 pb-2">
-                  <Users className="w-6 h-6" style={{ color: accent }} /> PLAYERS ({detail.players.length})
+                  <Users className="w-6 h-6" style={{ color: accent }} /> PLAYERS ({players.length})
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {detail.players.map((p, i) => (
+                  {players.map((p, i) => (
                     <PlayerChip key={i} p={p} />
                   ))}
                 </div>
@@ -207,7 +215,7 @@ export function GameDetailModal({
                         </tr>
                       </thead>
                       <tbody>
-                        {detail.players.map((p, i) => (
+                        {players.map((p, i) => (
                           <tr key={i} className="border-b border-white/10">
                             <td className="py-1 px-2 font-bold" style={{ color: p.color }}>{p.nick}</td>
                             <td className="text-center py-1 px-2">{p.role}</td>
@@ -254,16 +262,16 @@ export function GameDetailModal({
                       <Crown className="w-5 h-5" style={{ color: accent }} /> CHARACTERS
                     </h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                      {detail.players.map((p, i) => (
+                      {players.map((p, i) => (
                         <div key={i} className="border-2 border-white/20 overflow-hidden">
-                          {p.dndCharacterImg && (
+                          {(p.dndCharacterImg || p.img) && (
                             <div className="relative aspect-square">
-                              <img src={p.dndCharacterImg} alt={p.dndCharacter} className="w-full h-full object-cover grayscale" loading="lazy" />
+                              <img src={p.dndCharacterImg || p.img} alt={p.dndCharacter || p.nick} className="w-full h-full object-cover grayscale" loading="lazy" />
                               <div className="absolute inset-0 ud-scanlines opacity-30" />
                             </div>
                           )}
                           <div className="p-3 bg-black">
-                            <div className="font-bebas text-3xl" style={{ color: p.color }}>{p.dndCharacter}</div>
+                            <div className="font-bebas text-3xl" style={{ color: p.color }}>{p.dndCharacter || p.nick}</div>
                             <div className="font-mono-ud text-sm text-white/60">{p.dndRace} · {p.dndClass}</div>
                             <div className="font-bebas text-3xl mt-1" style={{ color: p.color }}>LVL {p.dndLevel}</div>
                             {p.memberId && MEMBER_DND_STATS[p.memberId] && (

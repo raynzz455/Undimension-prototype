@@ -13,6 +13,7 @@ import { useFetch } from "@/hooks/use-fetch";
 import { useChaosFetch } from "@/hooks/use-chaos-fetch";
 import { useSfx } from "@/hooks/use-sfx";
 import { cn } from "@/lib/utils";
+import { UnavailablePhoto } from "./unavailable-photo";
 import type { GalleryPhoto, Member } from "@/lib/undimension/data";
 
 type Tab = "about" | "gallery" | "news" | "guestbook" | "portfolio" | "games" | "info";
@@ -1100,12 +1101,12 @@ function AchievementsTab() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// GAMES TAB — game-specific: metadata + moments/photos (all) + ML stats (ml only)
-//              + DnD characters/campaigns (dnd only) + compatibility (all)
+// GAMES TAB — game-specific: metadata + players/photos (all, supports external
+//              players with own photo) + moments (all) + DnD characters/campaigns
+//              (dnd only) + compatibility (all)
 // ═══════════════════════════════════════════════════════════════════════════
 function GamesTab() {
   const { data: gamesData, refetch: refetchGames } = useFetch<{ games: { id: string; title: string; subtitle: string; description: string; accent: string; carouselTitle: string; bg: string; reverse: boolean }[] }>("/api/games");
-  const { data: statsData, refetch: refetchStats } = useFetch<{ stats: { id: string; memberId: string; gameId: string; role: string | null; favHero: string | null; rank: string | null; kda: string | null; winRate: string | null }[] }>("/api/games/player-stats");
   const { data: compatData, refetch: refetchCompat } = useFetch<{ compat: { id: string; memberId: string; gameId: string; level: number }[] }>("/api/games/compatibility");
   const { data: dndData, refetch: refetchDnd } = useFetch<{ characters: { id: string; memberId: string; characterName: string; race: string; charClass: string; level: number; img: string | null; str: number; dex: number; con: number; int: number; wis: number; cha: number }[] }>("/api/games/dnd-characters");
   const { data: dndCampaignData, refetch: refetchDndCampaigns } = useFetch<{ campaigns: { id: string; name: string; dm: string; status: string; description: string; sessions: number; storyOutline: string | null }[] }>("/api/games/dnd-campaigns");
@@ -1121,7 +1122,28 @@ function GamesTab() {
   const [momentDesc, setMomentDesc] = useState("");
   const [uploadingMoment, setUploadingMoment] = useState(false);
 
-  // DnD character create state
+  // Player create state (supports external players with own photo)
+  const [pName, setPName] = useState("");
+  const [pNick, setPNick] = useState("");
+  const [pColor, setPColor] = useState("#ff8c00");
+  const [pImg, setPImg] = useState<File | null>(null);
+  const [pImgUrl, setPImgUrl] = useState("");
+  const [pIsMember, setPIsMember] = useState(false);
+  const [pMemberSlug, setPMemberSlug] = useState("razka");
+  const [uploadingPlayerPhoto, setUploadingPlayerPhoto] = useState(false);
+  // ML-specific fields
+  const [pRole, setPRole] = useState("");
+  const [pFavHero, setPFavHero] = useState("");
+  const [pRank, setPRank] = useState("");
+  const [pKda, setPKda] = useState("");
+  const [pWinRate, setPWinRate] = useState("");
+  // DnD-specific fields
+  const [pDndChar, setPDndChar] = useState("");
+  const [pDndRace, setPDndRace] = useState("Human");
+  const [pDndClass, setPDndClass] = useState("Fighter");
+  const [pDndLevel, setPDndLevel] = useState("1");
+
+  // DnD character create state (the full character sheet with ability scores)
   const [dndMember, setDndMember] = useState("razka");
   const [dndName, setDndName] = useState("");
   const [dndRace, setDndRace] = useState("Human");
@@ -1135,16 +1157,18 @@ function GamesTab() {
   const [campDesc, setCampDesc] = useState("");
   const [campSessions, setCampSessions] = useState("0");
 
-  // Fetch moments for the selected game (URL changes when selectedGame changes)
+  // Fetch moments + players for the selected game (URL changes when selectedGame changes)
   const momentsUrl = `/api/games/moments?gameId=${selectedGame}`;
   const { data: momentsData, refetch: refetchMoments } = useFetch<{ moments: { id: string; title: string; description: string | null; img: string; order: number }[] }>(momentsUrl);
+  const playersUrl = `/api/games/players?gameId=${selectedGame}`;
+  const { data: playersData, refetch: refetchPlayers } = useFetch<{ players: { id: string; name: string; nick: string; img: string | null; color: string; role: string | null; favHero: string | null; rank: string | null; kda: string | null; winRate: string | null; dndCharacter: string | null; dndRace: string | null; dndClass: string | null; dndLevel: number; isMember: boolean; memberSlug: string | null; order: number }[] }>(playersUrl);
 
   const games = gamesData?.games ?? [];
-  const stats = statsData?.stats ?? [];
   const compat = compatData?.compat ?? [];
   const dndChars = dndData?.characters ?? [];
   const dndCampaigns = dndCampaignData?.campaigns ?? [];
   const moments = momentsData?.moments ?? [];
+  const players = playersData?.players ?? [];
 
   const flash = (msg: string, isErr = false) => {
     if (isErr) { setError(msg); setSuccess(null); } else { setSuccess(msg); setError(null); play("submit"); }
@@ -1161,26 +1185,66 @@ function GamesTab() {
     } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
   };
 
-  // --- ML player stats (role/hero/KDA/WR/rank per member) — ML ONLY ---
-  const updateStat = async (memberId: string, field: string, value: string) => {
-    const existing = stats.find((s) => s.memberId === memberId && s.gameId === selectedGame);
+  // --- Player photo upload (returns URL) ---
+  const uploadPlayerPhoto = async (): Promise<string | null> => {
+    if (!pImg) return null;
+    setUploadingPlayerPhoto(true);
     try {
-      if (existing) {
-        const delUrl = `/api/games/player-stats?id=${existing.id}`;
-        await chaosFetch(delUrl, { method: "DELETE" });
-      }
-      const payload: Record<string, string> = { memberId, gameId: selectedGame };
-      if (field) payload[field] = value;
-      if (existing) {
-        if (field !== "role" && existing.role) payload.role = existing.role;
-        if (field !== "favHero" && existing.favHero) payload.favHero = existing.favHero;
-        if (field !== "rank" && existing.rank) payload.rank = existing.rank;
-        if (field !== "kda" && existing.kda) payload.kda = existing.kda;
-        if (field !== "winRate" && existing.winRate) payload.winRate = existing.winRate;
-      }
-      const res = await chaosFetch("/api/games/player-stats", { method: "POST", body: JSON.stringify(payload) });
+      const form = new FormData();
+      form.append("file", pImg);
+      const res = await chaosFetch("/api/games/players/upload", { method: "POST", body: form });
       const d = await res.json(); if (!res.ok) throw new Error(d.error);
-      refetchStats(); flash(`✓ ${memberId.toUpperCase()} stat disimpan.`);
+      return d.url as string;
+    } catch (e) { flash(e instanceof Error ? e.message : "Gagal upload foto", true); return null; }
+    finally { setUploadingPlayerPhoto(false); }
+  };
+
+  // --- Create a player (member OR external, with own photo) ---
+  const createPlayer = async () => {
+    if (!pName.trim() || !pNick.trim()) { flash("Name dan nick wajib diisi.", true); return; }
+    let imgUrl = pImgUrl;
+    if (pImg) {
+      const uploaded = await uploadPlayerPhoto();
+      if (uploaded) imgUrl = uploaded;
+    }
+    try {
+      const payload: Record<string, unknown> = {
+        gameId: selectedGame,
+        name: pName, nick: pNick, color: pColor,
+        img: imgUrl || null,
+        isMember: pIsMember,
+        memberSlug: pIsMember ? pMemberSlug : null,
+      };
+      if (selectedGame === "ml") {
+        payload.role = pRole || null;
+        payload.favHero = pFavHero || null;
+        payload.rank = pRank || null;
+        payload.kda = pKda || null;
+        payload.winRate = pPWinRate ? pWinRate : null;
+      }
+      if (selectedGame === "dnd") {
+        payload.dndCharacter = pDndChar || null;
+        payload.dndRace = pDndRace;
+        payload.dndClass = pDndClass;
+        payload.dndLevel = Number(pDndLevel) || 1;
+      }
+      const res = await chaosFetch("/api/games/players", { method: "POST", body: JSON.stringify(payload) });
+      const d = await res.json(); if (!res.ok) throw new Error(d.error);
+      // Reset form
+      setPName(""); setPNick(""); setPColor("#ff8c00"); setPImg(null); setPImgUrl("");
+      setPRole(""); setPFavHero(""); setPRank(""); setPKda(""); setPWinRate("");
+      setPDndChar(""); setPDndRace("Human"); setPDndClass("Fighter"); setPDndLevel("1");
+      refetchPlayers(); flash(`✓ ${pNick} ditambahkan!`);
+    } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
+  };
+
+  const deletePlayer = async (id: string, nick: string) => {
+    if (!confirm(`Hapus player "${nick}"?`)) return;
+    try {
+      const delUrl = `/api/games/players?id=${id}`;
+      const res = await chaosFetch(delUrl, { method: "DELETE" });
+      if (!res.ok) throw new Error("Gagal");
+      refetchPlayers(); flash(`✓ ${nick} dihapus.`); play("close");
     } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
   };
 
@@ -1223,7 +1287,7 @@ function GamesTab() {
     } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
   };
 
-  // --- DnD character create ---
+  // --- DnD character create (full character sheet) ---
   const createDnd = async () => {
     if (!dndName.trim()) { flash("Character name wajib diisi.", true); return; }
     try {
@@ -1271,7 +1335,6 @@ function GamesTab() {
   };
 
   const selectedGameObj = games.find((g) => g.id === selectedGame);
-  const gameStats = stats.filter((s) => s.gameId === selectedGame);
   const gameCompat = compat.filter((c) => c.gameId === selectedGame);
   const COMPAT_LABELS = ["—", "RARE", "CASUAL", "MAIN"];
 
@@ -1290,7 +1353,7 @@ function GamesTab() {
       {/* Game selector */}
       <div className="border-8 border-[#00e5ff] bg-black p-6 shadow-[12px_12px_0_#00e5ff]">
         <h2 className="font-bebas text-4xl text-[#00e5ff] mb-4 flex items-center gap-2"><Plus className="w-8 h-8" /> GAMES MANAGER</h2>
-        <div className="font-mono-ud text-xs text-white/60 mb-2">▸ Pilih game untuk manage. Setiap game punya section berbeda — ML punya player stats, DnD punya characters + campaigns, semua game punya moments/photos.</div>
+        <div className="font-mono-ud text-xs text-white/60 mb-2">▸ Pilih game. Setiap game punya section berbeda — ML punya player stats (role/hero/KDA/WR), DnD punya characters + campaigns. Semua game punya players (dengan foto sendiri, bisa tambah player eksternal) + moments + compatibility.</div>
         <div className="flex flex-wrap gap-2 mb-4">
           {games.map((g) => (
             <button key={g.id} onClick={() => { play("click"); setSelectedGame(g.id); }}
@@ -1319,20 +1382,88 @@ function GamesTab() {
         </Section>
       )}
 
-      {/* 2. MOMENTS / PHOTOS (all games) */}
-      <Section title={`MOMENTS / SCREENSHOTS — ${gameLabel}`} color="#ff8c00" icon={ImageIcon}>
+      {/* 2. PLAYERS — all games, supports external players with own photo */}
+      <Section title={`PLAYERS — ${gameLabel}`} color="#ff8c00" icon={Users}>
+        <div className="font-mono-ud text-xs text-white/60 mb-2">▸ Pemain per game. Bisa member ATAU player eksternal (teman, rival, guest). Setiap player punya foto sendiri (terpisah dari foto profil member).</div>
+        {/* Create form */}
         <div className="space-y-2 border-2 border-[#ff8c00]/30 p-3 mb-3">
-          <div className="font-mono-ud text-xs text-[#ff8c00] tracking-widest">▸ UPLOAD NEW MOMENT</div>
-          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(e) => setMomentFile(e.target.files?.[0] || null)} className="block w-full text-xs font-mono-ud text-white file:mr-3 file:py-2 file:px-4 file:border-2 file:border-[#ff8c00] file:bg-[#ff8c00] file:text-black file:font-bold file:cursor-pointer file:hover:bg-[#ff00ff] file:hover:text-white" />
-          <input value={momentTitle} onChange={(e) => setMomentTitle(e.target.value.slice(0, 80))} placeholder="TITLE * (e.g. FIRST DIAMOND, CREEPER MASSACRE)" className="block w-full px-2 py-1.5 border-2 border-[#ff8c00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" />
-          <input value={momentDesc} onChange={(e) => setMomentDesc(e.target.value.slice(0, 300))} placeholder="Description (optional)" className="block w-full px-2 py-1.5 border-2 border-[#ff8c00] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
-          <button onClick={uploadMoment} disabled={uploadingMoment} className="w-full bg-[#ff8c00] text-black font-bebas text-2xl py-2 border-2 border-white hover:bg-[#ff00ff] hover:text-white transition-colors no-color-transition disabled:opacity-50">{uploadingMoment ? "UPLOADING..." : "+ UPLOAD MOMENT"}</button>
+          <div className="font-mono-ud text-xs text-[#ff8c00] tracking-widest">▸ ADD NEW PLAYER</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <input value={pName} onChange={(e) => setPName(e.target.value.slice(0, 60))} placeholder="NAME * (e.g. Raynaldi)" className="px-2 py-1.5 border-2 border-[#ff8c00] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+            <input value={pNick} onChange={(e) => setPNick(e.target.value.slice(0, 30))} placeholder="NICK * (e.g. Aldi)" className="px-2 py-1.5 border-2 border-[#ff8c00] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+            <div className="flex items-center gap-2"><span className="font-mono-ud text-[10px] text-white/60">COLOR</span><input type="color" value={pColor} onChange={(e) => setPColor(e.target.value)} className="w-10 h-8 border-2 border-[#ff8c00] bg-transparent cursor-pointer" /></div>
+          </div>
+          {/* Photo upload OR URL */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(e) => setPImg(e.target.files?.[0] || null)} className="block w-full text-xs font-mono-ud text-white file:mr-3 file:py-1.5 file:px-3 file:border-2 file:border-[#ff8c00] file:bg-[#ff8c00] file:text-black file:font-bold file:cursor-pointer file:hover:bg-[#ff00ff] file:hover:text-white" />
+            <input value={pImgUrl} onChange={(e) => setPImgUrl(e.target.value.slice(0, 300))} placeholder="ATAU paste photo URL" className="px-2 py-1.5 border-2 border-[#ff8c00] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+          </div>
+          {/* Is member toggle */}
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={pIsMember} onChange={(e) => setPIsMember(e.target.checked)} className="w-4 h-4" /><span className="font-mono-ud text-xs text-white/80">INI MEMBER?</span></label>
+            {pIsMember && (
+              <select value={pMemberSlug} onChange={(e) => setPMemberSlug(e.target.value)} className="px-2 py-1 border-2 border-[#ff8c00] bg-[#1a1a1a] text-white font-mono-ud text-xs">{MEMBER_SLUGS.map((m) => <option key={m} value={m}>{m.toUpperCase()}</option>)}</select>
+            )}
+          </div>
+          {/* ML-specific fields */}
+          {selectedGame === "ml" && (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 border-2 border-[#ff8c00]/20 p-2">
+              <input value={pRole} onChange={(e) => setPRole(e.target.value.slice(0, 30))} placeholder="ROLE" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+              <input value={pFavHero} onChange={(e) => setPFavHero(e.target.value.slice(0, 40))} placeholder="FAV HERO" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+              <input value={pRank} onChange={(e) => setPRank(e.target.value.slice(0, 40))} placeholder="RANK" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+              <input value={pKda} onChange={(e) => setPKda(e.target.value.slice(0, 30))} placeholder="KDA" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+              <input value={pWinRate} onChange={(e) => setPWinRate(e.target.value.slice(0, 20))} placeholder="WR" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+            </div>
+          )}
+          {/* DnD-specific fields */}
+          {selectedGame === "dnd" && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 border-2 border-[#ff8c00]/20 p-2">
+              <input value={pDndChar} onChange={(e) => setPDndChar(e.target.value.slice(0, 60))} placeholder="CHARACTER NAME" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+              <input value={pDndRace} onChange={(e) => setPDndRace(e.target.value.slice(0, 40))} placeholder="RACE" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+              <input value={pDndClass} onChange={(e) => setPDndClass(e.target.value.slice(0, 40))} placeholder="CLASS" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+              <input value={pDndLevel} onChange={(e) => setPDndLevel(e.target.value.slice(0, 2))} placeholder="LVL" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+            </div>
+          )}
+          <button onClick={createPlayer} disabled={uploadingPlayerPhoto} className="w-full bg-[#ff8c00] text-black font-bebas text-2xl py-2 border-2 border-white hover:bg-[#ff00ff] hover:text-white transition-colors no-color-transition disabled:opacity-50">{uploadingPlayerPhoto ? "UPLOADING FOTO..." : "+ ADD PLAYER"}</button>
+        </div>
+        {/* Player list */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {players.map((p) => (
+            <div key={p.id} className="border-2 border-[#ff8c00]/40 p-2 bg-[#1a1a1a] flex items-center gap-2">
+              <div className="w-14 h-14 flex-shrink-0 overflow-hidden border-2 border-white/30">
+                {p.img ? (
+                  <img src={p.img} alt={p.nick} className="w-full h-full object-cover grayscale" loading="lazy" />
+                ) : (
+                  <UnavailablePhoto label="NO PHOTO" nick={p.nick} color={p.color || "#ff8c00"} />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-bebas text-lg leading-none" style={{ color: p.color }}>{p.nick}</div>
+                <div className="font-mono-ud text-[10px] text-white/50">{p.name}{p.isMember && <span className="ml-1 text-[#d4ff00]">· MEMBER</span>}{!p.isMember && <span className="ml-1 text-[#ff8c00]">· GUEST</span>}</div>
+                {selectedGame === "ml" && p.role && <div className="font-mono-ud text-[9px] text-white/60 truncate">{p.role} · {p.favHero} · {p.rank}</div>}
+                {selectedGame === "dnd" && p.dndCharacter && <div className="font-mono-ud text-[9px] text-white/60 truncate">{p.dndCharacter} · {p.dndRace} · {p.dndClass} · LVL {p.dndLevel}</div>}
+              </div>
+              <button onClick={() => deletePlayer(p.id, p.nick)} className="bg-[#ff4d4d] text-white px-2 py-1 border border-white font-mono-ud text-[9px] font-bold hover:bg-[#ff8c00] transition-colors no-color-transition">DEL</button>
+            </div>
+          ))}
+          {players.length === 0 && <div className="col-span-full font-mono-ud text-xs text-white/40 text-center py-4">No players yet. Add members or external players above.</div>}
+        </div>
+      </Section>
+
+      {/* 3. MOMENTS / PHOTOS (all games) */}
+      <Section title={`MOMENTS / SCREENSHOTS — ${gameLabel}`} color="#d4ff00" icon={ImageIcon}>
+        <div className="space-y-2 border-2 border-[#d4ff00]/30 p-3 mb-3">
+          <div className="font-mono-ud text-xs text-[#d4ff00] tracking-widest">▸ UPLOAD NEW MOMENT</div>
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(e) => setMomentFile(e.target.files?.[0] || null)} className="block w-full text-xs font-mono-ud text-white file:mr-3 file:py-2 file:px-4 file:border-2 file:border-[#d4ff00] file:bg-[#d4ff00] file:text-black file:font-bold file:cursor-pointer file:hover:bg-[#ff00ff] file:hover:text-white" />
+          <input value={momentTitle} onChange={(e) => setMomentTitle(e.target.value.slice(0, 80))} placeholder="TITLE * (e.g. FIRST DIAMOND, CREEPER MASSACRE)" className="block w-full px-2 py-1.5 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" />
+          <input value={momentDesc} onChange={(e) => setMomentDesc(e.target.value.slice(0, 300))} placeholder="Description (optional)" className="block w-full px-2 py-1.5 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+          <button onClick={uploadMoment} disabled={uploadingMoment} className="w-full bg-[#d4ff00] text-black font-bebas text-2xl py-2 border-2 border-white hover:bg-[#ff00ff] hover:text-white transition-colors no-color-transition disabled:opacity-50">{uploadingMoment ? "UPLOADING..." : "+ UPLOAD MOMENT"}</button>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           {moments.map((m) => (
-            <div key={m.id} className="border-2 border-[#ff8c00]/40 p-2 bg-[#1a1a1a]">
+            <div key={m.id} className="border-2 border-[#d4ff00]/40 p-2 bg-[#1a1a1a]">
               <img src={m.img} alt={m.title} className="w-full h-24 object-cover mb-1" loading="lazy" />
-              <div className="font-bebas text-sm text-[#ff8c00] truncate">{m.title}</div>
+              <div className="font-bebas text-sm text-[#d4ff00] truncate">{m.title}</div>
               {m.description && <div className="font-mono-ud text-[9px] text-white/40 truncate">{m.description}</div>}
               <button onClick={() => deleteMoment(m.id, m.title)} className="w-full mt-1 bg-[#ff4d4d] text-white py-1 border border-white font-mono-ud text-[9px] font-bold hover:bg-[#ff8c00] transition-colors no-color-transition">DEL</button>
             </div>
@@ -1341,32 +1472,10 @@ function GamesTab() {
         </div>
       </Section>
 
-      {/* 3. ML PLAYER STATS — ML ONLY */}
-      {selectedGame === "ml" && (
-        <Section title="PLAYER STATS — MOBILE LEGENDS" color="#d4ff00" icon={Users}>
-          <div className="font-mono-ud text-xs text-white/60 mb-2">▸ ML-specific: role, favorite hero, rank, KDA, win rate. Tidak ditampilkan untuk game lain karena setiap game punya stat berbeda.</div>
-          <div className="space-y-2">
-            {MEMBER_SLUGS.map((slug) => {
-              const s = gameStats.find((st) => st.memberId === slug);
-              return (
-                <div key={slug} className="grid grid-cols-1 md:grid-cols-6 gap-2 items-center border-2 border-[#d4ff00]/30 p-2">
-                  <span className="font-bebas text-lg text-[#d4ff00]">{slug.toUpperCase()}</span>
-                  <input defaultValue={s?.role || ""} onBlur={(e) => e.target.value !== (s?.role || "") && updateStat(slug, "role", e.target.value)} placeholder="ROLE" className="px-2 py-1 border border-[#d4ff00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
-                  <input defaultValue={s?.favHero || ""} onBlur={(e) => e.target.value !== (s?.favHero || "") && updateStat(slug, "favHero", e.target.value)} placeholder="FAV HERO" className="px-2 py-1 border border-[#d4ff00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
-                  <input defaultValue={s?.rank || ""} onBlur={(e) => e.target.value !== (s?.rank || "") && updateStat(slug, "rank", e.target.value)} placeholder="RANK" className="px-2 py-1 border border-[#d4ff00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
-                  <input defaultValue={s?.kda || ""} onBlur={(e) => e.target.value !== (s?.kda || "") && updateStat(slug, "kda", e.target.value)} placeholder="KDA" className="px-2 py-1 border border-[#d4ff00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
-                  <input defaultValue={s?.winRate || ""} onBlur={(e) => e.target.value !== (s?.winRate || "") && updateStat(slug, "winRate", e.target.value)} placeholder="WR" className="px-2 py-1 border border-[#d4ff00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
-                </div>
-              );
-            })}
-          </div>
-        </Section>
-      )}
-
-      {/* 4. D&D CHARACTERS — DnD ONLY */}
+      {/* 4. D&D CHARACTERS (full character sheet with ability scores) — DnD ONLY */}
       {selectedGame === "dnd" && (
-        <Section title="D&D CHARACTERS" color="#8a2be2" icon={Award}>
-          <div className="font-mono-ud text-xs text-white/60 mb-2">▸ DnD-specific: character name, race, class, level per member.</div>
+        <Section title="D&D CHARACTERS (FULL SHEET)" color="#8a2be2" icon={Award}>
+          <div className="font-mono-ud text-xs text-white/60 mb-2">▸ Full character sheet with ability scores (str/dex/con/int/wis/cha). Terpisah dari Players section di atas — ini untuk character detail yang punya stats lengkap.</div>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-2 mb-3 border-2 border-[#8a2be2]/30 p-3">
             <select value={dndMember} onChange={(e) => setDndMember(e.target.value)} className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs">{MEMBER_SLUGS.map((m) => <option key={m} value={m}>{m.toUpperCase()}</option>)}</select>
             <input value={dndName} onChange={(e) => setDndName(e.target.value.slice(0, 60))} placeholder="CHARACTER NAME *" className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
@@ -1424,7 +1533,7 @@ function GamesTab() {
 
       {/* 6. COMPATIBILITY (all games) */}
       <Section title={`COMPATIBILITY — ${gameLabel}`} color="#d4ff00" icon={Shield}>
-        <div className="font-mono-ud text-xs text-white/60 mb-2">▸ Per-member × game: — (none), RARE, CASUAL, MAIN. Berlaku untuk semua game.</div>
+        <div className="font-mono-ud text-xs text-white/60 mb-2">▸ Per-member × game: — (none), RARE, CASUAL, MAIN. Berlaku untuk semua game. Ini untuk member saja.</div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {MEMBER_SLUGS.map((slug) => {
             const c = gameCompat.find((co) => co.memberId === slug);

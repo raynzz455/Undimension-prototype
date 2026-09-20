@@ -1848,3 +1848,145 @@ Key design decisions:
 5. **Seed games data** — populate Game, GameMoment, GamePlayerStat, GameCompatibility, DnDCharacter, DnDCampaign from the static data so the GamesTab has data to show/edit.
 
 Full work record: appended to `/home/z/my-project/worklog.md` (this section).
+
+---
+Task ID: 36
+Agent: main (Z.ai Code)
+Task: User feedback on Task 35: the "more detail" section in games has players that include player photos. This part should be DIFFERENT from the main member profile because games can add OTHER players too, not just collective members.
+
+## Section 1: What Was Wrong
+
+The `GamePlayerStat` model (ML-specific player stats) had `memberId` as a **required FK to Member.slug**. This meant every game player HAD to be one of the 7 collective members — you couldn't add external players (friends, rivals, guests). And the player's photo came from `MEMBER_IMGS` (the member's profile photo), so a member couldn't have a different avatar per game, and external players had no photo at all.
+
+The game-expander's "more detail" modal (`GameDetailModal`) used the static `GAME_DETAILS[gameId].players` — all members, photos from `MEMBER_IMGS`. No way to show external players or per-game player photos.
+
+## Section 2: Completed Modifications
+
+### 2.1 New `GamePlayer` model (schema + migration)
+
+Added a new Prisma model `GamePlayer` that is **independent of Member** — it can represent collective members OR external players. Each player has their OWN photo (separate from the member profile photo).
+
+```prisma
+model GamePlayer {
+  id           String   @id @default(cuid())
+  gameId       String   // FK → Game.gameId (CASCADE delete)
+  game         Game     @relation(...)
+  name         String   // full display name (e.g. "Raynaldi" or "Guest Joe")
+  nick         String   // short alias
+  img          String?  // player photo (URL → Supabase games/players/*.webp). NULL = unavailable.
+  color        String   @default("#ff8c00")
+  role         String?  // ML: MIDLANER, JUNGLER
+  favHero      String?  // ML: Lancelot
+  rank         String?  // ML: Mythic Glory
+  kda          String?
+  winRate      String?
+  dndCharacter String?  // DnD: character name
+  dndRace      String?
+  dndClass     String?
+  dndLevel     Int      @default(1)
+  isMember     Boolean  @default(false) // true = collective member
+  memberSlug   String?  // optional FK to Member.slug (only if isMember=true)
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+  @@index([gameId])
+  @@index([isMember])
+}
+```
+
+Added the `players GamePlayer[]` relation to the `Game` model. Created migration `0005_add_game_players.sql` with the CREATE TABLE + FK (CASCADE) + 2 indexes.
+
+### 2.2 New API routes (2 files)
+
+**`/api/games/players/route.ts`** — full GamePlayer CRUD:
+- GET `?gameId=minecraft` — list players for a game, ordered by `isMember desc, order asc` (members first)
+- POST — create a player (member OR external). Validates gameId+name+nick required. Sanitizes all fields. DnD level clamped 1-20.
+- PUT `?id=xxx` — update any player fields
+- DELETE `?id=xxx`
+All chaos-protected + rate-limited (5 req/60s/IP) + sanitized.
+
+**`/api/games/players/upload/route.ts`** — player photo upload:
+- POST (FormData: file + optional playerId). Uses the shared 3-layer `validateImageUpload()` (extension allowlist + content-type + magic-byte). Uploads to Supabase `games/players/`. If `playerId` is provided + DB configured, auto-updates the player's `img` field. Returns the Supabase URL.
+Chaos-protected + rate-limited + 3-layer image validation.
+
+### 2.3 Redesigned GamesTab — new PLAYERS section
+
+Replaced the old "ML player stats" section (which used the member-only `GamePlayerStat` model) with a new **PLAYERS** section that:
+- Shows for **ALL games** (not just ML)
+- Supports **external players** (not just members) — the "INI MEMBER?" checkbox toggles whether the player is a collective member. If checked, shows a memberSlug selector. If unchecked, the player is an external guest.
+- Each player has their **OWN photo** — either upload a file (via the shared 3-layer validation) OR paste a URL. The photo is stored on the GamePlayer record, separate from the member profile photo.
+- **Game-specific fields** in the add-player form:
+  - ML: role/favHero/rank/kda/winRate (shown only when selectedGame === "ml")
+  - DnD: dndCharacter/dndRace/dndClass/dndLevel (shown only when selectedGame === "dnd")
+  - Other games: just name/nick/photo/color
+- Player list shows each player's photo (or UnavailablePhoto if no photo), nick, name, MEMBER/GUEST badge, and game-specific stats
+- Delete button per player
+
+The old ML-specific `GamePlayerStat` model + the `updateStat` function were removed from the GamesTab (the new GamePlayer model supersedes it for the player roster use case). The `DnDCharacter` model (full character sheet with 6 ability scores str/dex/con/int/wis/cha) is kept as a separate "D&D CHARACTERS (FULL SHEET)" section since it has more detail than the GamePlayer's dndCharacter/dndRace/dndClass/dndLevel fields.
+
+### 2.4 Updated game-expander GameDetailModal — fetch DB players
+
+The "more detail" modal now:
+1. Fetches players from `/api/games/players?gameId=xxx` via `useFetch`
+2. Uses DB players if non-empty, falls back to static `GAME_DETAILS[gameId].players` if DB unconfigured/empty
+3. All `detail.players` references replaced with the `players` variable (3 places: the PlayerChip grid, the ML stats table, the DnD character cards)
+4. The DnD character card image now uses `p.dndCharacterImg || p.img` — falls back to the player's own photo if the static `dndCharacterImg` (gallery image) isn't set. This makes DB players (who have `img` but not `dndCharacterImg`) show their photo in the character card.
+5. The DnD character name shows `p.dndCharacter || p.nick` — falls back to the player's nick if no character name is set.
+
+## Section 3: Verification Results
+
+### Lint
+- ✅ `bun run lint` — 0 errors, 0 warnings
+
+### Dev server
+- ✅ Clean compile, no errors
+
+### API routes (curl)
+| Route | Method | Expected | Got |
+|---|---|---|---|
+| /api/games/players?gameId=minecraft | GET | 200 | 200 ✅ |
+| /api/games/players (no token) | POST | 403 | 403 ✅ |
+| /api/games/players/upload (no token) | POST | 403 | 403 ✅ |
+| /api/games/players/upload (GET) | GET | 405 | 405 ✅ (POST-only route) |
+
+### Player photo upload security (curl with chaos token)
+| Test | Expected | Got |
+|---|---|---|
+| Upload evil.svg | 400 extCheck | `Ekstensi .svg tidak diizinkan` ✅ |
+| Upload fake.png (svg content) | 400 magicByte | `magic byte mismatch` ✅ |
+
+## Section 4: Key Decisions
+
+1. **New `GamePlayer` model instead of modifying `GamePlayerStat`**: The existing `GamePlayerStat` has `memberId` as a required FK to Member — can't make it optional without breaking existing data + the schema's referential integrity. Creating a new `GamePlayer` model (independent of Member, with optional `memberSlug`) is cleaner — it doesn't touch the existing `GamePlayerStat` data, and it's the "source of truth" for the game player roster (supports external players + own photos). The old `GamePlayerStat` remains for backward compatibility.
+
+2. **`isMember` + optional `memberSlug`**: The `GamePlayer` model has `isMember Boolean` + `memberSlug String?`. If `isMember=true`, `memberSlug` links to the Member (for aggregating "this member plays X games"). If `isMember=false`, the player is external (no member link). This design supports both cases cleanly.
+
+3. **Per-game player photo (separate from member profile)**: The `GamePlayer.img` field stores the player's photo FOR THIS GAME. A member can have a different avatar per game (e.g. their ML avatar vs their Minecraft avatar), and external players have their own photo. This directly addresses the user's request "harus beda dari main profile member".
+
+4. **Players section replaces ML stats section**: The old GamesTab had an "ML player stats" section using `GamePlayerStat` (member-only, ML-specific). The new PLAYERS section uses `GamePlayer` (all games, supports external players + photos). For ML, the Players section includes the role/favHero/rank/kda/winRate fields in the add-player form. This avoids duplication — ONE players section instead of two.
+
+5. **DnDCharacter kept as separate "full sheet" section**: The `DnDCharacter` model has 6 ability scores (str/dex/con/int/wis/cha) — more detail than `GamePlayer`'s dndCharacter/dndRace/dndClass/dndLevel. Kept as a separate "D&D CHARACTERS (FULL SHEET)" section for the full character sheet. The Players section shows the player's DnD character name/race/class/level (lighter), the full sheet shows the ability scores.
+
+6. **`p.dndCharacterImg || p.img` fallback in game-expander**: The static `GAME_DETAILS` players have `dndCharacterImg` (a gallery image for the character). DB `GamePlayer` records don't have this field — they have `img` (the player photo). The DnD character card now uses `p.dndCharacterImg || p.img` so DB players show their photo in the character card.
+
+## Section 5: Unresolved Issues / Risks / Next-phase Recommendations
+
+### Current Status: ✅ Task 36 Complete & Verified
+- New `GamePlayer` model (independent of Member, supports external players + own photos)
+- Players API (CRUD + photo upload with 3-layer validation)
+- GamesTab redesigned: new PLAYERS section (all games, external players, own photos, game-specific fields)
+- game-expander "more detail" modal fetches DB players + shows their photos
+- Lint clean, all API routes verified, security tests pass
+
+### Known minor notes
+- The old `GamePlayerStat` model + API route remain (not deleted) for backward compatibility. If a future phase wants to consolidate, migrate `GamePlayerStat` data into `GamePlayer` (set `isMember=true`, `memberSlug=memberId`, copy role/favHero/rank/kda/winRate) then delete `GamePlayerStat`.
+- The GamesTab wasn't E2E browser-tested (requires Konami code for chaos-mode access). Verified via lint + API curl + security tests.
+- The `DnDCharacter` full-sheet section still uses the member-only `DnDCharacter` model (FK to Member). If external players need full character sheets, the model would need the same `isMember`/`memberSlug` treatment as `GamePlayer`. For now, external DnD players use the `GamePlayer` model (lighter — no ability scores).
+
+### Next-phase recommendations (priority order)
+1. **Git push** — commit the GamePlayer model + players API + redesigned GamesTab + game-expander update.
+2. **Seed GamePlayer data** — populate the GamePlayer table from the static `GAME_DETAILS` players (set `isMember=true`, `memberSlug=memberId`, copy the ML stats) so the game-expander "more detail" modal shows players from the DB.
+3. **DnD character full sheet for external players** — if needed, add `isMember`/`memberSlug` to the `DnDCharacter` model so external players can have full character sheets too.
+4. **Player photo lightbox** — click a player's photo in the game-expander to see it full-size.
+5. **Player order drag-and-drop** — let the user reorder players within a game via drag-and-drop (currently uses the `order` field but no UI to reorder).
+
+Full work record: appended to `/home/z/my-project/worklog.md` (this section).

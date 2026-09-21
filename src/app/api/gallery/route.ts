@@ -15,8 +15,13 @@ export async function GET() {
       console.warn("[GET /api/gallery] DB unavailable, serving static photos only.", e instanceof Error ? e.message : e);
     }
   }
-  const data = [...dbPhotos, ...GALLERY_PHOTOS];
-  return NextResponse.json({ photos: data, count: data.length });
+  // If DB has photos, return ONLY DB photos (static GALLERY_PHOTOS disappear).
+  // This lets users replace the static seed data by uploading their own photos.
+  // If DB has 0 photos (or unconfigured), return static GALLERY_PHOTOS as fallback.
+  if (dbPhotos.length > 0) {
+    return NextResponse.json({ photos: dbPhotos, count: dbPhotos.length });
+  }
+  return NextResponse.json({ photos: GALLERY_PHOTOS, count: GALLERY_PHOTOS.length });
 }
 
 export async function PUT(req: NextRequest) {

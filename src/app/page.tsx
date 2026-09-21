@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { OpeningScreen } from "@/components/undimension/opening-screen";
+import dynamic from "next/dynamic";
 import { NavBar, type Page } from "@/components/undimension/nav-bar";
 import { AboutPage } from "@/components/undimension/about-page";
 import { MemoriesPage } from "@/components/undimension/memories-page";
@@ -18,6 +18,15 @@ import { useSfx, useKonamiCode } from "@/hooks/use-sfx";
 import { useChaos } from "@/components/undimension/chaos-provider";
 import { Volume2, VolumeX, Ghost, Lock, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+// Lazy-load the OpeningScreen — it imports Three.js (600KB) + the WebGL
+// blackhole shader. When the session cookie skips the opening page, this
+// chunk is NEVER loaded → massive LCP + bundle-size improvement.
+// ssr: false because Three.js requires the browser (window/canvas).
+const OpeningScreen = dynamic(
+  () => import("@/components/undimension/opening-screen").then((m) => m.OpeningScreen),
+  { ssr: false, loading: () => <div className="min-h-screen bg-[#09090b]" /> },
+);
 
 const FOOTER_STATS = [
   { label: "MEMBERS", value: "07" },

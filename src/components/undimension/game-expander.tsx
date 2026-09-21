@@ -90,6 +90,15 @@ export function GameDetailModal({
   const dbPlayers = dbPlayersData?.players ?? [];
   const players = dbPlayers.length > 0 ? dbPlayers : (detail?.players ?? []);
 
+  // Fetch DB moments (screenshots) for this game. Falls back to static
+  // GAME_DETAILS moments if DB unconfigured/empty — so uploaded screenshots
+  // from chaos-mode show here.
+  const momentsUrl = gameId ? `/api/games/moments?gameId=${gameId}` : "";
+  const { data: dbMomentsData } = useFetch<{ moments: { id: string; title: string; description: string | null; img: string }[] }>(momentsUrl);
+  const dbMoments = dbMomentsData?.moments ?? [];
+  const dbMomentsFormatted = dbMoments.map((m) => ({ img: m.img, title: m.title, desc: m.description }));
+  const moments = dbMomentsFormatted.length > 0 ? dbMomentsFormatted : (detail?.moments ?? []);
+
   useEffect(() => {
     if (open) {
       document.body.classList.add("modal-open");
@@ -232,13 +241,13 @@ export function GameDetailModal({
               )}
 
               {/* Moments / Gallery */}
-              {detail.moments && detail.moments.length > 0 && (
+              {moments && moments.length > 0 && (
                 <div>
                   <h4 className="font-bebas text-4xl text-white mb-3 flex items-center gap-2 border-b-2 border-white/20 pb-1">
-                    <ImageIcon className="w-5 h-5" style={{ color: accent }} /> MOMENTS ({detail.moments.length})
+                    <ImageIcon className="w-5 h-5" style={{ color: accent }} /> MOMENTS ({moments.length})
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    {detail.moments.map((m, i) => (
+                    {moments.map((m, i) => (
                       <div key={i} className="border-2 border-white/20 overflow-hidden">
                         <div className="relative aspect-video">
                           <img src={m.img} alt={m.title} className="w-full h-full object-cover" loading="lazy" />

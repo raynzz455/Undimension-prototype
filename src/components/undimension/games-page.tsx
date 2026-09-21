@@ -5,6 +5,7 @@ import { StarField } from "./star-field";
 import { StarGraphic } from "./primitives";
 import { GameDetailModal } from "./game-expander";
 import { GAMES, type GameSection } from "@/lib/undimension/data";
+import { useFetch } from "@/hooks/use-fetch";
 import { cn } from "@/lib/utils";
 
 function GameCarousel({ images, title }: { images: string[]; title: string }) {
@@ -195,16 +196,29 @@ function GameSectionView({ game }: { game: GameSection }) {
 }
 
 export function GamesPage() {
+  // Fetch games from DB (includes uploaded moment photos as `images`).
+  // Falls back to static GAMES if DB unconfigured/empty — so the carousel
+  // shows DB-uploaded photos when available, static photos otherwise.
+  // Per-game: if DB game has 0 moments, fall back to that game's static images.
+  const { data } = useFetch<{ games: GameSection[] }>("/api/games");
+  const games = (data?.games?.length ? data.games : GAMES).map((g) => {
+    const staticGame = GAMES.find((s) => s.id === g.id);
+    if (staticGame && (!g.images || g.images.length === 0)) {
+      return { ...g, images: staticGame.images };
+    }
+    return g;
+  });
+
   return (
     // Page bg is always dark (cinematic game carousel look). Text must be
     // white in BOTH themes — `text-black dark:text-white` would render black
     // text on dark bg in light mode = unreadable. Hardcode to `text-white`.
     <div className="page-enter flex flex-col bg-[#09090b] text-white relative">
       <StarField variant="dark" className="fixed z-[1]" sparkles={false} />
-      {GAMES.map((game, i) => (
+      {games.map((game, i) => (
         <div key={game.id}>
           <GameSectionView game={game} />
-          {i < GAMES.length - 1 && <GameSeparator />}
+          {i < games.length - 1 && <GameSeparator />}
         </div>
       ))}
     </div>

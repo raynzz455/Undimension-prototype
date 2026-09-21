@@ -14,7 +14,8 @@ export async function GET(req: NextRequest) {
     const characters = await db.dnDCharacter.findMany(memberId ? { where: { memberId } } : undefined);
     return NextResponse.json({ characters });
   } catch (e) {
-    return NextResponse.json({ error: "Gagal fetch DnD characters", detail: e instanceof Error ? e.message : String(e) }, { status: 500 });
+    console.warn("[GET /api/games/dnd-characters] DB error, returning empty.", e instanceof Error ? e.message : e);
+    return NextResponse.json({ characters: [] });
   }
 }
 

@@ -19,10 +19,11 @@ export async function GET(req: NextRequest) {
     });
     return NextResponse.json({ players });
   } catch (e) {
-    return NextResponse.json(
-      { error: "Gagal fetch players", detail: e instanceof Error ? e.message : String(e) },
-      { status: 500 },
-    );
+    // Graceful fallback — if the table doesn't exist (migration not run) or
+    // the DB is temporarily unavailable, return empty so the frontend falls
+    // back to static GAME_DETAILS players. No 500.
+    console.warn("[GET /api/games/players] DB error, returning empty.", e instanceof Error ? e.message : e);
+    return NextResponse.json({ players: [] });
   }
 }
 

@@ -14,7 +14,8 @@ export async function GET(req: NextRequest) {
     const compat = await db.gameCompatibility.findMany(gameId ? { where: { gameId } } : undefined);
     return NextResponse.json({ compat });
   } catch (e) {
-    return NextResponse.json({ error: "Gagal fetch compatibility", detail: e instanceof Error ? e.message : String(e) }, { status: 500 });
+    console.warn("[GET /api/games/compatibility] DB error, returning empty.", e instanceof Error ? e.message : e);
+    return NextResponse.json({ compat: [] });
   }
 }
 

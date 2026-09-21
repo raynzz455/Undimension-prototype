@@ -168,6 +168,7 @@ function Footer({ setPage }: { setPage: (p: Page) => void }) {
 
 export default function Home() {
   const [hasEntered, setHasEntered] = useState(false);
+  const [checking, setChecking] = useState(true); // avoid hydration mismatch
   const [page, setPage] = useState<Page>("about");
   const [soundOn, setSoundOn] = useState(true);
   const [konami, setKonami] = useState(false);
@@ -176,6 +177,38 @@ export default function Home() {
 
   const { play, ensureCtx } = useSfx(soundOn);
   const { chaos, godMode, unlockGodMode } = useChaos();
+
+  // ── Opening page session cookie ──
+  // When the user clicks ENTER, we set a cookie so that a quick refresh
+  // (within OPENING_SESSION_TTL_MS) skips the opening page and goes
+  // directly to the main app. After the TTL expires, the opening page
+  // shows again (fresh visit).
+  //
+  // The `checking` state prevents hydration mismatch: the initial server
+  // render shows the opening page (hasEntered=false). On the client, after
+  // mount, we check the cookie — if recent, we set hasEntered=true. A brief
+  // dark screen (matching the opening page bg) shows during this check to
+  // avoid a flash of the opening page before skipping.
+  const OPENING_COOKIE = "ud-opening-seen";
+  const OPENING_SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+  useEffect(() => {
+    // Defer setState to avoid cascading renders (react-hooks rule).
+    Promise.resolve().then(() => {
+      try {
+        const match = document.cookie.match(new RegExp(`${OPENING_COOKIE}=(\\d+)`));
+        if (match) {
+          const ts = parseInt(match[1], 10);
+          if (Number.isFinite(ts) && Date.now() - ts < OPENING_SESSION_TTL_MS) {
+            setHasEntered(true); // skip opening page — user has seen it recently
+          }
+        }
+      } catch {
+        // cookie parse failed — show opening page (safe default)
+      }
+      setChecking(false);
+    });
+  }, [OPENING_COOKIE, OPENING_SESSION_TTL_MS]);
 
   useKonamiCode(() => {
     setKonami(true);
@@ -226,8 +259,17 @@ export default function Home() {
   const handleEnter = () => {
     ensureCtx();
     play("submit");
+    // Set the session cookie — quick refresh within 30 min will skip the opening page
+    const maxAge = Math.floor(OPENING_SESSION_TTL_MS / 1000);
+    document.cookie = `${OPENING_COOKIE}=${Date.now()};path=/;max-age=${maxAge};SameSite=Lax`;
     setHasEntered(true);
   };
+
+  // Brief dark screen while checking the cookie (avoids hydration mismatch +
+  // prevents a flash of the opening page before skipping it)
+  if (checking) {
+    return <div className="min-h-screen bg-[#09090b]" aria-hidden />;
+  }
 
   if (!hasEntered) {
     return <OpeningScreen onEnter={handleEnter} />;

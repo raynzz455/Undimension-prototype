@@ -5,7 +5,7 @@
 #
 # Triggers:
 #   - On push to main when files in public/gallery/uploads/ change
-#   - On schedule (every hour) to catch any stragglers
+#   - On schedule (once per day) to catch any stragglers
 #   - Manually via workflow_dispatch
 #
 # What it does:
@@ -24,7 +24,7 @@ on:
     paths:
       - "public/gallery/uploads/**"
   schedule:
-    - cron: "0 * * * *"  # Every hour
+    - cron: "0 0 * * *"  # Once per day at 00:00 UTC
   workflow_dispatch:
 
 jobs:

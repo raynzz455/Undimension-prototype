@@ -2,20 +2,21 @@
 # Supabase Keepalive — Prevent free-tier auto-pause
 #
 # Supabase free tier pauses database after 1 week of inactivity.
-# This workflow pings the database every 5 minutes to keep it active.
+# This workflow pings the database once every 2 days to keep it active
+# (reduced from every 5 minutes — that was overkill and contributing to
+# connection noise on the free tier).
 #
 # Setup:
 #   Set these GitHub Secrets (Settings → Secrets and variables → Actions):
 #   - NEXT_PUBLIC_SUPABASE_URL  (e.g. https://xxxxx.supabase.co)
 #   - SUPABASE_SERVICE_KEY      (service_role key)
-#   - DATABASE_URL              (PostgreSQL connection string — optional, for direct DB ping)
 # ═══════════════════════════════════════════════════════════════════════════
 
 name: Supabase Keepalive
 
 on:
   schedule:
-    - cron: "*/5 * * * *"  # Every 5 minutes
+    - cron: "0 0 */2 * *"  # Every 2 days at 00:00 UTC
   workflow_dispatch:
 
 jobs:

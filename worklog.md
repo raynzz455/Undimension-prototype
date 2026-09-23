@@ -2365,3 +2365,130 @@ This simplifies the deployment setup. The user manages DB schema/seed via the Su
 1. **User action**: optionally remove the `DATABASE_URL` GitHub secret (no longer used). Or leave it set — it's harmless if unused.
 2. **Keep migration files up-to-date**: when adding new schema changes, write a new `prisma/migrations/00XX_*.sql` file (idempotent, with `ON CONFLICT` clauses) so the user can paste it into Supabase SQL editor. Don't rely on `bun run db:push` from CI.
 3. **Optional**: add a `README.md` note in `prisma/migrations/` explaining the recommended run order for fresh-DB setup.
+
+---
+Task ID: 41
+Agent: main (Z.ai Code)
+Task: User shared Supabase log showing frequent `42P05: prepared statement "sN" already exists` + `08P01: bind message supplies N parameters, but prepared statement "sM" requires K` + `26000: prepared statement "s7" does not exist` errors. These are causing the recurring "server is busy" 503 popup. User wants: (1) reduce GitHub Action schedules — keepalive → once every 2 days, other scheduled workflows → once per day; (2) fix the underlying cause.
+
+## Section 1: Root Cause Analysis
+
+The `42P05 / 08P01 / 26000` Postgres errors are the **classic Prisma + PgBouncer collision**.
+
+- Prisma uses **prepared statements** by default (named `s1`, `s2`, `s3`, …).
+- Supabase's "Transaction pooler" (port 6543) routes each transaction to a backend connection from a shared pool.
+- The SAME prepared-statement name (`s4`) gets registered on multiple backend connections.
+- When PgBouncer routes a new transaction to a backend that already has `s4` registered → Postgres errors `42P05: prepared statement "s4" already exists`.
+- When parameters don't match a previously-prepared `s4` on the new backend → `08P01: bind message supplies N parameters, but prepared statement "sM" requires K`.
+- When a prepared statement gets deallocated mid-transaction → `26000: prepared statement "sN" does not exist`.
+
+These errors bubble up to Prisma → API routes catch the error → return 503 → frontend `useFetch` dispatches `ud-notify-error` popup → user sees "server lagi sibuk" repeatedly.
+
+**Fix**: tell Prisma to **disable prepared statements** by setting `pgbouncer=true` on the URL. Prisma 5+ detects this URL param and switches off prepared statements client-side → no collisions.
+
+**Secondary cause**: too-frequent GitHub Action schedules were generating extra API pings on Supabase REST API. While those use PostgREST (not Prisma → no prepared-statement collisions), they still contribute to connection noise on the free tier.
+
+## Section 2: Changes Made
+
+### 2.1 `src/lib/db.ts` — auto-inject `pgbouncer=true` + `connection_limit=1`
+
+Added a `buildDbUrl()` helper that's called at PrismaClient instantiation:
+
+```ts
+function buildDbUrl(): string | undefined {
+  const url = process.env.DATABASE_URL
+  if (!url) return undefined
+  const sep = url.includes('?') ? '&' : '?'
+  let out = url
+  // Always ensure pgbouncer=true so Prisma disables prepared statements.
+  if (!out.includes('pgbouncer=')) out += `${sep}pgbouncer=true`
+  // For Supabase pooler URLs only — limit to 1 connection per instance
+  if (out.includes('pooler.supabase.com') && !out.includes('connection_limit=')) {
+    out += out.includes('?') ? '&connection_limit=1' : '?connection_limit=1'
+  }
+  return out
+}
+```
+
+Then `new PrismaClient({ datasources: { db: { url: buildDbUrl() } } })`.
+
+**Why this works even if the user's Vercel DATABASE_URL doesn't have `?pgbouncer=true`**:
+- The URL is mutated BEFORE being passed to PrismaClient, so even if the user only set `postgresql://postgres.xxx:pass@aws-0-ap-southeast-1.pooler.supabase.co:6543/postgres` in Vercel, the code adds `?pgbouncer=true&connection_limit=1` automatically.
+- This is a "defense-in-depth" — works regardless of whether the user reads the env-var-setup docs.
+
+**Safety**:
+- `pgbouncer=true` on a non-pooler URL (direct connection port 5432) is harmless — Prisma just disables prepared statements client-side (no functional change, slightly less query plan caching).
+- `connection_limit=1` is only added for pooler URLs (`pooler.supabase.com` substring check) — not for direct URLs (which are used by long-running dev servers where 1 connection would be too restrictive).
+
+Also added `msg.includes("prepared statement")` to `dbRetry()`'s transient-error detector — if a prepared-statement collision DOES still happen (e.g., race during the brief retry window), `dbRetry` will retry once and likely succeed on a fresh connection.
+
+### 2.2 `.github/workflows/webp-guardian.yml` — hourly → daily
+
+```diff
+-    - cron: "0 * * * *"  # Every hour
++    - cron: "0 0 * * *"  # Once per day at 00:00 UTC
+```
+
+Comment also updated: "every hour" → "once per day". This workflow converts non-WebP images in `public/gallery/uploads/` to WebP — hourly was overkill since the push trigger already catches real uploads.
+
+### 2.3 `.github/workflows/supabase-keepalive.yml` — every 5 min → every 2 days
+
+```diff
+-    - cron: "*/5 * * * *"  # Every 5 minutes
++    - cron: "0 0 */2 * *"  # Every 2 days at 00:00 UTC
+```
+
+This is the BIG win — was firing **288 times per day** (every 5 minutes × 24 × 60 / 5), now fires **0.5 times per day** (every 2 days). Supabase free tier auto-pauses after 1 week of inactivity, so 1 ping every 2 days is plenty (3.5 pings/week vs the 7-day pause threshold). The 5-min schedule was extreme overkill.
+
+Also updated the comment block:
+- Removed the `DATABASE_URL` line from setup hints (no longer relevant since `db-migrate.yml` was deleted in Task 40)
+- Added explanatory comment about why it was reduced from every-5-minutes
+
+## Section 3: Other Errors Noted in the User's Log
+
+### `22021: invalid byte sequence for encoding "UTF8": 0x00`
+
+A null byte (0x00) is being inserted into a text column somewhere. This is a SEPARATE issue — likely from a form input that contains a stray null byte (could be from a copy-paste of binary data, or a malformed unicode input).
+
+Not fixed in this task — would need to:
+1. Identify which API route + field is receiving the null byte
+2. Add input sanitization (strip null bytes) in that route's validator
+
+Recommendation for a future phase: add `.replace(/\0/g, '')` to all string fields in the API route validators (`/api/games`, `/api/members/[slug]`, etc.) before passing to Prisma.
+
+### `00000: checkpoint complete` / `checkpoint starting`
+
+These are NORMAL Postgres internal log lines — the database is doing a periodic WAL checkpoint. Not an error. Can be ignored.
+
+## Section 4: Verification
+
+### Lint
+- ✅ `bun run lint` — 0 errors, 0 warnings
+
+### Dev server
+- ✅ Next.js 16.1.3 (Turbopack) healthy
+- ✅ `GET / 200 in 334ms` after the `db.ts` change compiled cleanly
+- ✅ No new errors in `dev.log`
+
+### Browser verification (agent-browser)
+- ✅ `agent-browser open http://localhost:3000` → page title "UNDIMENSION — Circle Beyond Space & Time" loads
+- ✅ Mobile viewport snapshot (390x844) shows clean render, no hydration errors
+- ✅ Page renders correctly (the change in `db.ts` is only invoked when an API route hits the DB — for the static opening screen it's not even called)
+
+## Section 5: Expected Impact on Production 503s
+
+After this change is deployed to Vercel:
+1. **Prisma will stop using prepared statements** → no more `42P05` collision errors → no more 503 from that cause.
+2. **GitHub Action noise** reduced from 288 keepalive pings/day + 24 webp-guardian scans/day → 0.5 keepalive pings/day + 1 webp-guardian scan/day (≈99% reduction in CI-generated Supabase REST pings).
+3. **`dbRetry` now also retries on `prepared statement` errors** — if a collision still happens (race during retry), the next attempt will likely succeed on a fresh connection.
+
+**Caveats**:
+- If the user's Vercel `DATABASE_URL` is set to the **direct connection (port 5432)**, this code adds `pgbouncer=true` (harmless) but skips `connection_limit=1`. The user should still switch to the **pooler URL (port 6543)** in Vercel for max benefit (per Task 39 guidance).
+- The `22021` null-byte error is a separate data issue — needs a different fix (input sanitization in API routes).
+
+## Section 6: Next-phase Recommendations
+
+1. **Git push** — commit the `db.ts` + workflow schedule changes. This is the highest-priority fix for the 503 problem.
+2. **Verify in production** — after Vercel auto-deploys, monitor the Supabase logs for 24h. The `42P05 / 08P01 / 26000` errors should disappear (or drop to near-zero).
+3. **Fix the `22021` null-byte issue** — add `.replace(/\0/g, '')` to all string field validators in the API routes. (Future task.)
+4. **Optionally: add `directUrl` to `prisma/schema.prisma`** — if the user later wants to use `prisma migrate` (not just `db:push`), they'll need a separate direct URL. Currently we only use `db:push` from CLI + manual SQL in Supabase editor, so this isn't urgent.

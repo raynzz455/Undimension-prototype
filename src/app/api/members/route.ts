@@ -11,7 +11,7 @@ function safeParse<T>(raw: string | null | undefined, fallback: T): T {
 
 function mapMember(m: {
   slug: string; name: string; nick: string; role: string; img: string;
-  color: string; highlight: string; bio: string;
+  color: string; highlight: string; bio: string; bioPortfolio?: string | null;
   tagline: string; quote: string; funFactsJson: string; element: string; joinYear: string;
   statsJson: string; socialsJson: string;
   taglineCareer: string; location: string; availability: string;
@@ -26,6 +26,7 @@ function mapMember(m: {
     color: m.color,
     highlight: m.highlight,
     bio: m.bio,
+    bioPortfolio: m.bioPortfolio || "",
     tagline: m.tagline || "",
     quote: m.quote || "",
     funFacts: safeParse<string[]>(m.funFactsJson, []),

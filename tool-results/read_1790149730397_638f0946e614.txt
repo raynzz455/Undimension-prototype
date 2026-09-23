@@ -1,0 +1,817 @@
+     1→export type WorkExperience = {
+     2→  company: string;
+     3→  role: string;
+     4→  period: string;
+     5→  description: string;
+     6→  current?: boolean;
+     7→};
+     8→
+     9→export type Education = {
+    10→  school: string;
+    11→  degree: string;
+    12→  period: string;
+    13→  description?: string;
+    14→};
+    15→
+    16→export type Skill = {
+    17→  name: string;
+    18→  level: number; // 0-100
+    19→  category: "LANGUAGE" | "FRAMEWORK" | "TOOL" | "SOFT";
+    20→};
+    21→
+    22→export type Achievement = {
+    23→  title: string;
+    24→  year: string;
+    25→  description: string;
+    26→  icon?: string;
+    27→  images?: string[]; // Sertifikat, medali, foto kemenangan (carousel)
+    28→};
+    29→
+    30→export type Member = {
+    31→  id: string;
+    32→  name: string;
+    33→  nick: string;
+    34→  role: string;
+    35→  img: string;
+    36→  color: string; // bg-* utility
+    37→  highlight: string; // text-* utility
+    38→  bio: string;
+    39→  tagline: string; // short punchy one-liner for modal
+    40→  quote: string; // a personal quote shown in modal
+    41→  funFacts: string[]; // 3-4 bullet facts
+    42→  element: string; // thematic element (e.g. "FIRE", "VOID")
+    43→  joinYear: string;
+    44→  stats: { label: string; value: string }[];
+    45→  socials: { label: string; href: string }[];
+    46→  // Portfolio / CV fields
+    47→  taglineCareer: string; // career-focused one-liner
+    48→  location: string;
+    49→  availability: string; // e.g. "OPEN TO WORK", "EMPLOYED", "FREELANCE"
+    50→  education: Education[];
+    51→  workHistory: WorkExperience[];
+    52→  skills: Skill[];
+    53→  achievements: Achievement[];
+    54→  projects: PortfolioProject[];
+    55→  /** Hidden members are only visible in chaos mode, not on public pages. */
+    56→  hidden?: boolean;
+    57→};
+    58→
+    59→export const MEMBERS: Member[] = [
+    60→  {
+    61→    id: "aldi",
+    62→    name: "Raynaldi",
+    63→    nick: "Aldi",
+    64→    role: "THE FOUNDER",
+    65→    img: "",
+    66→    color: "bg-[#ff4d4d]",
+    67→    highlight: "text-[#ff4d4d]",
+    68→    bio: "Titik nol dari mana semua orbit dimulai. Sang pendiri yang menyalakan percikan pertama dan tak pernah membiarkannya padam, sejauh apapun anggota lainnya pergi.",
+    69→    tagline: "Lit the first spark. Never let it die.",
+    70→    quote: "Sejauh apapun kita terbang, gravitasi pertemanan selalu menarik kita kembali ke orbit yang sama.",
+    71→    funFacts: [
+    72→      "Selalu jadi orang pertama yang online di grup",
+    73→      "Pemilik rekor 'paling sering ngajak nongkrong'",
+    74→      "Punya playlist spotify untuk tiap mood anggota",
+    75→      "Tidak pernah telat — kecuali sengaja",
+    76→    ],
+    77→    element: "FIRE",
+    78→    joinYear: "2020",
+    79→    stats: [
+    80→      { label: "STR", value: "16" },
+    81→      { label: "DEX", value: "12" },
+    82→      { label: "CON", value: "15" },
+    83→      { label: "INT", value: "13" },
+    84→      { label: "WIS", value: "10" },
+    85→      { label: "CHA", value: "14" },
+    86→    ],
+    87→    socials: [
+    88→      { label: "INSTAGRAM", href: "#" },
+    89→      { label: "X_TWITTER", href: "#" },
+    90→      { label: "DISCORD", href: "#" },
+    91→    ],
+    92→  },
+    93→  {
+    94→    id: "razka",
+    95→    name: "Muhammad Razka Faudzan",
+    96→    nick: "Rembo",
+    97→    role: "THE ARCHITECT",
+    98→    img: "/members/member-razka.webp",
+    99→    color: "bg-[#00e5ff]",
+   100→    highlight: "text-[#00e5ff]",
+   101→    bio: "Perancang struktur di balik kekacauan. Setiap blueprint yang dia buat ternyata jadi peta untuk petualangan yang tak terduga.",
+   102→    tagline: "Designs the chaos others call home.",
+   103→    quote: "Setiap struktur yang aku bangun punya pintu rahasia. Itu bukan bug — itu feature.",
+   104→    funFacts: [
+   105→      "Bisa ngoding sambil denger podcast true crime",
+   106→      "Arsip screenshot-nya punya 4000+ file",
+   107→      "Selalu bawa charger cadangan ke mana-mana",
+   108→      "Menghitung optimasi FPS sebelum beli HP",
+   109→    ],
+   110→    element: "ICE",
+   111→    joinYear: "2020",
+   112→    stats: [
+   113→      { label: "STR", value: "8" },
+   114→      { label: "DEX", value: "14" },
+   115→      { label: "CON", value: "12" },
+   116→      { label: "INT", value: "18" },
+   117→      { label: "WIS", value: "15" },
+   118→      { label: "CHA", value: "16" },
+   119→    ],
+   120→    socials: [
+   121→      { label: "INSTAGRAM", href: "#" },
+   122→      { label: "X_TWITTER", href: "#" },
+   123→      { label: "DISCORD", href: "#" },
+   124→    ],
+   125→  },
+   126→  {
+   127→    id: "reza",
+   128→    name: "Reza",
+   129→    nick: "Eja",
+   130→    role: "THE STRATEGIST",
+   131→    img: "/members/member-reza.webp",
+   132→    color: "bg-[#d4ff00]",
+   133→    highlight: "text-[#d4ff00]",
+   134→    bio: "Pikirannya selalu lima langkah di depan. Saat yang lain panik, dia sudah menyiapkan tiga rencana cadangan.",
+   135→    tagline: "Five moves ahead before you blink.",
+   136→    quote: "Rencana A gagal? Tenang. Aku punya rencana B sampai Z, dan dua di antaranya melibatkan ayam.",
+   137→    funFacts: [
+   138→      "Punya notes folder khusus berisi 'what-if scenarios'",
+   139→      "Menang ranked 1v3 dengan strategi mind-game",
+   140→      "Tidur 5 jam tapi terlihat segar (kecurigaan robot)",
+   141→      "Pernah invalidate sebuah patch game dalam 30 menit",
+   142→    ],
+   143→    element: "MIND",
+   144→    joinYear: "2020",
+   145→    stats: [
+   146→      { label: "STR", value: "6" },
+   147→      { label: "DEX", value: "12" },
+   148→      { label: "CON", value: "10" },
+   149→      { label: "INT", value: "20" },
+   150→      { label: "WIS", value: "16" },
+   151→      { label: "CHA", value: "13" },
+   152→    ],
+   153→    socials: [
+   154→      { label: "INSTAGRAM", href: "#" },
+   155→      { label: "X_TWITTER", href: "#" },
+   156→      { label: "DISCORD", href: "#" },
+   157→    ],
+   158→  },
+   159→  {
+   160→    id: "abyan",
+   161→    name: "Muhammad Abyan Riyadh Amal",
+   162→    nick: "Byan",
+   163→    role: "THE VANGUARD",
+   164→    img: "/members/member-abyan.webp",
+   165→    color: "bg-[#ff00ff]",
+   166→    highlight: "text-[#ff00ff]",
+   167→    bio: "Barisan depan yang tak pernah mundur. Kalau ada tembok, dia yang duluan nubruk — dan biasanya temboknya yang kalah.",
+   168→    tagline: "Runs headfirst. Walls lose.",
+   169→    quote: "Pikir dulu itu nanti. Sekarang, charge!",
+   170→    funFacts: [
+   171→      "Pernah push tower sendirian dan menang",
+   172→      "Reaksi dodge creeper: 0.2 detik",
+   173→      "Koleksi skin game lebih mahal dari motor",
+   174→      "Motto: 'lebih baik regret daripada penasaran'",
+   175→    ],
+   176→    element: "STORM",
+   177→    joinYear: "2020",
+   178→    stats: [
+   179→      { label: "STR", value: "18" },
+   180→      { label: "DEX", value: "14" },
+   181→      { label: "CON", value: "17" },
+   182→      { label: "INT", value: "8" },
+   183→      { label: "WIS", value: "7" },
+   184→      { label: "CHA", value: "10" },
+   185→    ],
+   186→    socials: [
+   187→      { label: "INSTAGRAM", href: "#" },
+   188→      { label: "X_TWITTER", href: "#" },
+   189→      { label: "DISCORD", href: "#" },
+   190→    ],
+   191→  },
+   192→  {
+   193→    id: "rasya",
+   194→    name: "Rasya Musyafa Ridwan",
+   195→    nick: "Acong",
+   196→    role: "THE MAVERICK",
+   197→    img: "/members/member-rasya.webp",
+   198→    color: "bg-[#ff8c00]",
+   199→    highlight: "text-[#ff8c00]",
+   200→    bio: "Yang tak pernah bisa ditebak. Strateginya? Tidak ada. Dan itu justru strategi paling mematikan yang pernah ada.",
+   201→    tagline: "No plan. That's the plan.",
+   202→    quote: "Kalau musuh bisa nebak langkahku, berarti aku belum cukup random.",
+   203→    funFacts: [
+   204→      "Pernah menang tournament pake pick random",
+   205→      "Punya 12 meme yang hanya dimengerti circle ini",
+   206→      "Spontan ngajak roadtrip tengah malam — berkali-kali",
+   207→      "Quote-nya di-pin di 5 server discord berbeda",
+   208→    ],
+   209→    element: "CHAOS",
+   210→    joinYear: "2020",
+   211→    stats: [
+   212→      { label: "STR", value: "10" },
+   213→      { label: "DEX", value: "18" },
+   214→      { label: "CON", value: "12" },
+   215→      { label: "INT", value: "14" },
+   216→      { label: "WIS", value: "12" },
+   217→      { label: "CHA", value: "13" },
+   218→    ],
+   219→    socials: [
+   220→      { label: "INSTAGRAM", href: "#" },
+   221→      { label: "X_TWITTER", href: "#" },
+   222→      { label: "DISCORD", href: "#" },
+   223→    ],
+   224→  },
+   225→  {
+   226→    id: "rifqi",
+   227→    name: "Muhammad Rifqi",
+   228→    nick: "Tipki",
+   229→    role: "THE ENIGMA",
+   230→    img: "",
+   231→    color: "bg-[#00ff00]",
+   232→    highlight: "text-[#00ff00]",
+   233→    bio: "Misteri berjalan. Kadang hadir, kadang hilang, tapi selalu muncul tepat saat dibutuhkan. Seperti glitch di matriks.",
+   234→    tagline: "Here when it matters. Gone otherwise.",
+   235→    quote: "Online status-ku tidak mencerminkan realita. Aku selalu ada — di latar.",
+   236→    funFacts: [
+   237→      "Pernah ghosting 3 bulan lalu balik seolah tak terjadi apa-apa",
+   238→      "Punya 6 alias di platform berbeda",
+   239→      "Reaction time-nya konstan di bawah 150ms (dicurigai AI)",
+   240→      "Hanya muncul di chat saat ada yang butuh di-save",
+   241→    ],
+   242→    element: "VOID",
+   243→    joinYear: "2020",
+   244→    stats: [
+   245→      { label: "STR", value: "12" },
+   246→      { label: "DEX", value: "16" },
+   247→      { label: "CON", value: "14" },
+   248→      { label: "INT", value: "13" },
+   249→      { label: "WIS", value: "18" },
+   250→      { label: "CHA", value: "8" },
+   251→    ],
+   252→    socials: [
+   253→      { label: "INSTAGRAM", href: "#" },
+   254→      { label: "X_TWITTER", href: "#" },
+   255→      { label: "DISCORD", href: "#" },
+   256→    ],
+   257→  },
+   258→  {
+   259→    id: "dudit",
+   260→    name: "Raditya Jundika Putra",
+   261→    nick: "Dudit",
+   262→    role: "THE CATALYST",
+   263→    img: "",
+   264→    color: "bg-[#8a2be2]",
+   265→    highlight: "text-[#8a2be2]",
+   266→    bio: "Elemen yang mempercepat reaksi. Tanpa dia, semuanya akan berjalan lambat. Dengan dia, semuanya jadi ledakan.",
+   267→    tagline: "Accelerator of every reaction.",
+   268→    quote: "Aku bukan pemicu masalah. Aku cuma yang bikin semuanya jadi lebih cepat — termasuk kelar-nya.",
+   269→    funFacts: [
+   270→      "Pernah convert 3 orang jadi main game baru dalam sehari",
+   271→      "Menyebar rekomendasi anime lebih cepat dari algoritma",
+   272→      "Penemu 'meta baru' yang 80% akurat",
+   273→      "Tanggung jawab atas 60% drama server",
+   274→    ],
+   275→    element: "ENERGY",
+   276→    joinYear: "2020",
+   277→    stats: [
+   278→      { label: "STR", value: "10" },
+   279→      { label: "DEX", value: "8" },
+   280→      { label: "CON", value: "14" },
+   281→      { label: "INT", value: "14" },
+   282→      { label: "WIS", value: "18" },
+   283→      { label: "CHA", value: "16" },
+   284→    ],
+   285→    socials: [
+   286→      { label: "INSTAGRAM", href: "#" },
+   287→      { label: "X_TWITTER", href: "#" },
+   288→      { label: "DISCORD", href: "#" },
+   289→    ],
+   290→  },
+   291→  {
+   292→    id: "nayla",
+   293→    name: "Nayla",
+   294→    nick: "Naye",
+   295→    role: "THE PHANTOM",
+   296→    img: "",
+   297→    color: "bg-[#ff006e]",
+   298→    highlight: "text-[#ff006e]",
+   299→    bio: "Entitas misterius yang muncul hanya saat chaos mode aktif. Hadir di bayang-bayang, namun selalu ada saat dibutuhkan.",
+   300→    tagline: "Here when chaos calls. Gone when it fades.",
+   301→    quote: "Aku bukan glitch. Aku fitur yang belum kamu temukan.",
+   302→    funFacts: [
+   303→      "Muncul hanya dalam chaos mode",
+   304→      "Identitas sebenarnya tidak ada yang tahu",
+   305→      "Selalu hadir saat konami code diaktifkan",
+   306→      "Lebih mirip hantu daripada member",
+   307→    ],
+   308→    element: "PHANTOM",
+   309→    joinYear: "2026",
+   310→    stats: [
+   311→      { label: "STR", value: "10" },
+   312→      { label: "DEX", value: "20" },
+   313→      { label: "CON", value: "8" },
+   314→      { label: "INT", value: "18" },
+   315→      { label: "WIS", value: "16" },
+   316→      { label: "CHA", value: "20" },
+   317→    ],
+   318→    socials: [
+   319→      { label: "INSTAGRAM", href: "#" },
+   320→      { label: "X_TWITTER", href: "#" },
+   321→      { label: "DISCORD", href: "#" },
+   322→    ],
+   323→    hidden: true,
+   324→  },
+   325→];
+   326→
+   327→export type HarapanCard = {
+   328→  id: string;
+   329→  title: string;
+   330→  img: string;
+   331→  stamp: string;
+   332→  quote: string;
+   333→  author: string;
+   334→  bg: string;
+   335→  shadow: string;
+   336→  rotate: string;
+   337→};
+   338→
+   339→export const HARAPAN: HarapanCard[] = [
+   340→  {
+   341→    id: "mimpi",
+   342→    title: "MIMPI KAMI",
+   343→    img: "/gallery/harapan-mimpi.webp",
+   344→    stamp: "DREAM_01",
+   345→    quote: "Seperti bintang yang menerangi malam — mimpi kami abadi.",
+   346→    author: "BY REZA",
+   347→    bg: "bg-[#d4ff00]",
+   348→    shadow: "shadow-[12px_12px_0_#fff] dark:shadow-[12px_12px_0_#000]",
+   349→    rotate: "md:-rotate-3 md:-translate-y-4",
+   350→  },
+   351→  {
+   352→    id: "negeri",
+   353→    title: "HARAPAN NEGERI",
+   354→    img: "/gallery/harapan-negeri.webp",
+   355→    stamp: "VOICE_02",
+   356→    quote: "Our voices matter. Suara kami adalah kontribusi nyata.",
+   357→    author: "BY RAZKA",
+   358→    bg: "bg-[#00e5ff]",
+   359→    shadow: "shadow-[12px_12px_0_#fff] dark:shadow-[12px_12px_0_#000]",
+   360→    rotate: "md:rotate-2 md:translate-y-8",
+   361→  },
+   362→  {
+   363→    id: "kota",
+   364→    title: "HARAPAN KOTA",
+   365→    img: "/gallery/harapan-kota.webp",
+   366→    stamp: "UNITY_03",
+   367→    quote: "In unity, we find strength. Dalam kebersamaan ada kekuatan.",
+   368→    author: "BY RASYA",
+   369→    bg: "bg-[#ff4d4d]",
+   370→    shadow: "shadow-[12px_12px_0_#fff] dark:shadow-[12px_12px_0_#000]",
+   371→    rotate: "md:-rotate-1 md:-translate-y-2",
+   372→  },
+   373→  {
+   374→    id: "depan",
+   375→    title: "MASA DEPAN",
+   376→    img: "/gallery/harapan-depan.webp",
+   377→    stamp: "FUTURE_04",
+   378→    quote: "Tak ada yang tahu apa yang ada di depan — tapi kami hadapi bersama.",
+   379→    author: "BY ALDI",
+   380→    bg: "bg-[#ff00ff]",
+   381→    shadow: "shadow-[12px_12px_0_#d4ff00]",
+   382→    rotate: "md:rotate-4 md:translate-y-12",
+   383→  },
+   384→];
+   385→
+   386→export type GameSection = {
+   387→  id: string;
+   388→  sector: string;
+   389→  title: string;
+   390→  subtitle: string;
+   391→  description: string;
+   392→  bg: string;
+   393→  accent: string;
+   394→  carouselTitle: string;
+   395→  images: string[];
+   396→  reverse?: boolean;
+   397→  fontClass?: string;
+   398→};
+   399→
+   400→export const GAMES: GameSection[] = [
+   401→  {
+   402→    id: "minecraft",
+   403→    sector: "SEKTOR 01",
+   404→    title: "MINECRAFT",
+   405→    subtitle: "SURVIVAL OF THE FITTEST",
+   406→    description:
+   407→      "Dunia tanpa batas, tempat kami membangun dari nol. Satu blok tanah, satu pedang kayu, dan ratusan jam yang dihabiskan menambang diamond. (Dan ya, ada yang selalu mati kena creeper.)",
+   408→    bg: "/games/minecraft-bg.webp",
+   409→    accent: "#5d9e35",
+   410→    carouselTitle: "OUR WORLD",
+   411→    images: [
+   412→      "/members/member-razka.webp",
+   413→      "/members/member-reza.webp",
+   414→      "/members/member-abyan.webp",
+   415→      "/members/member-rasya.webp",
+   416→    ],
+   417→  },
+   418→  {
+   419→    id: "roblox",
+   420→    sector: "SEKTOR 02",
+   421→    title: "ROBLOX",
+   422→    subtitle: "PURE UNADULTERATED CHAOS",
+   423→    description:
+   424→      "Dari roleplay absurd sampai obby yang bikin emosi. Ini adalah kanvas imajinasi kolektif paling liar kami. Oof!",
+   425→    bg: "/games/roblox-bg.webp",
+   426→    accent: "#cc0000",
+   427→    carouselTitle: "CHAOS INC",
+   428→    images: [
+   429→      "/members/member-rasya.webp",
+   430→      "/members/member-abyan.webp",
+   431→      "/members/member-reza.webp",
+   432→      "/members/member-razka.webp",
+   433→    ],
+   434→    reverse: true,
+   435→  },
+   436→  {
+   437→    id: "ml",
+   438→    sector: "SEKTOR 03",
+   439→    title: "MOBILE LEGENDS",
+   440→    subtitle: "PUSH MID OR AFK",
+   441→    description:
+   442→      "Arena tempur harian. Kami menang bersama, atau kalah dengan gaya (dan saling menyalahkan). Koneksi merah, draft aneh, epic comeback.",
+   443→    bg: "/games/ml-bg.webp",
+   444→    accent: "#00e5ff",
+   445→    carouselTitle: "ARENA LOG",
+   446→    images: [
+   447→      "/members/member-reza.webp",
+   448→      "/members/member-rasya.webp",
+   449→      "/members/member-razka.webp",
+   450→      "/members/member-abyan.webp",
+   451→    ],
+   452→  },
+   453→  {
+   454→    id: "dnd",
+   455→    sector: "SEKTOR 04",
+   456→    title: "DUNGEONS & DRAGONS",
+   457→    subtitle: "NATURAL 20 OR CRITICAL FAIL",
+   458→    description:
+   459→      "Meja imajinasi tempat kami menjadi pahlawan (atau badut). Dunia yang terbentuk dari kata-kata, kertas, dan dadu 20 sisi. Roll for initiative!",
+   460→    bg: "/games/dnd-bg.webp",
+   461→    accent: "#ffebd2",
+   462→    carouselTitle: "TAVERN TALES",
+   463→    images: [
+   464→      "/members/member-abyan.webp",
+   465→      "/members/member-razka.webp",
+   466→      "/members/member-rasya.webp",
+   467→      "/members/member-reza.webp",
+   468→    ],
+   469→    reverse: true,
+   470→    fontClass: "font-cinzel",
+   471→  },
+   472→];
+   473→
+   474→export type GalleryPhoto = {
+   475→  id: string;
+   476→  img: string;
+   477→  title: string;
+   478→  date: string;
+   479→  rotate: string;
+   480→  author: string;
+   481→};
+   482→
+   483→export const GALLERY_PHOTOS: GalleryPhoto[] = [
+   484→  {
+   485→    id: "g1",
+   486→    img: "",
+   487→    title: "VISI AWAL",
+   488→    date: "2020",
+   489→    rotate: "-rotate-2",
+   490→    author: "ALDI",
+   491→  },
+   492→  {
+   493→    id: "g2",
+   494→    img: "/members/member-razka.webp",
+   495→    title: "MIMPI BINTANG",
+   496→    date: "2021",
+   497→    rotate: "rotate-2",
+   498→    author: "RAZKA",
+   499→  },
+   500→  {
+   501→    id: "g3",
+   502→    img: "/members/member-reza.webp",
+   503→    title: "IMPIAN NEGERI",
+   504→    date: "2022",
+   505→    rotate: "-rotate-1",
+   506→    author: "REZA",
+   507→  },
+   508→  {
+   509→    id: "g4",
+   510→    img: "/members/member-abyan.webp",
+   511→    title: "MALAM DI KOTA",
+   512→    date: "2022",
+   513→    rotate: "rotate-3",
+   514→    author: "ABYAN",
+   515→  },
+   516→  {
+   517→    id: "g5",
+   518→    img: "/members/member-rasya.webp",
+   519→    title: "MALAM PERMAINAN",
+   520→    date: "2023",
+   521→    rotate: "-rotate-3",
+   522→    author: "RASYA",
+   523→  },
+   524→  {
+   525→    id: "g6",
+   526→    img: "/gallery/gallery-1.webp",
+   527→    title: "GLITCH MOMENT",
+   528→    date: "2023",
+   529→    rotate: "rotate-1",
+   530→    author: "RIFQI",
+   531→  },
+   532→  {
+   533→    id: "g7",
+   534→    img: "/gallery/gallery-2.webp",
+   535→    title: "CHaos THEORY",
+   536→    date: "2024",
+   537→    rotate: "-rotate-2",
+   538→    author: "DUDIT",
+   539→  },
+   540→  {
+   541→    id: "g8",
+   542→    img: "/gallery/gallery-3.webp",
+   543→    title: "NIGHT SEQUENCE",
+   544→    date: "2024",
+   545→    rotate: "rotate-2",
+   546→    author: "ALDI",
+   547→  },
+   548→];
+   549→
+   550→export type TimelineMilestone = {
+   551→  id: string;
+   552→  year: string;
+   553→  season: string;
+   554→  title: string;
+   555→  description: string;
+   556→  color: string;
+   557→  icon: string;
+   558→};
+   559→
+   560→export const TIMELINE: TimelineMilestone[] = [
+   561→  {
+   562→    id: "t1",
+   563→    year: "2020",
+   564→    season: "AUTUMN",
+   565→    title: "THE SPARK",
+   566→    description:
+   567→      "Tujuh anak SMK dipertemukan oleh satu meja kosong di pojok kantin. Obrolan tentang game jadi jembatan, dan tanpa disadari, sebuah orbit terbentuk.",
+   568→    color: "#ff4d4d",
+   569→    icon: "✦",
+   570→  },
+   571→  {
+   572→    id: "t2",
+   573→    year: "2021",
+   574→    season: "WINTER",
+   575→    title: "FIRST DUNGEON",
+   576→    description:
+   577→      "Kampanye D&D pertama yang berakhir total party kill di ruang pertama. Bukan kegagalan — itu inisiasi. Dari sini lahir inside joke yang bertahan bertahun-tahun.",
+   578→    color: "#00e5ff",
+   579→    icon: "🎲",
+   580→  },
+   581→  {
+   582→    id: "t3",
+   583→    year: "2022",
+   584→    season: "SPRING",
+   585→    title: "MINECRAFT ERA",
+   586→    description:
+   587→      "Server survival private dibangun. Base utama digrebeg creeper 47 kali. Diamond pertama ditambang bareng pada jam 3 pagi. Kenangan itu tak tergantikan.",
+   588→    color: "#d4ff00",
+   589→    icon: "⛏",
+   590→  },
+   591→  {
+   592→    id: "t4",
+   593→    year: "2023",
+   594→    season: "SUMMER",
+   595→    title: "MOBILE LEGENDS GRIND",
+   596→    description:
+   597→      "Push rank sampai Mythic dengan komposisi draft penuh chaos. Persahabatan diuji oleh lag, afk, dan saling menyalahkan — tapi tidak pernah patah.",
+   598→    color: "#ff00ff",
+   599→    icon: "⚔",
+   600→  },
+   601→  {
+   602→    id: "t5",
+   603→    year: "2024",
+   604→    season: "AUTUMN",
+   605→    title: "THE ROBLOX CHAOS",
+   606→    description:
+   607→      "Era obby absurd dan roleplay yang nggak masuk akal. Oof terdengar ratusan kali sehari. collective imajinasi mencapai puncak kekacauan yang indah.",
+   608→    color: "#ff8c00",
+   609→    icon: "◉",
+   610→  },
+   611→  {
+   612→    id: "t6",
+   613→    year: "2025",
+   614→    season: "WINTER",
+   615→    title: "DIMENSIONAL DRIFT",
+   616→    description:
+   617→      "Satu per satu mulai sibuk: kuliah, kerja, hidup. Grup sepi. Tapi setiap ada yang butuh, orbit selalu menarik kita kembali. Gravitasi tidak pernah lemah.",
+   618→    color: "#8a2be2",
+   619→    icon: "∞",
+   620→  },
+   621→  {
+   622→    id: "t7",
+   623→    year: "2026",
+   624→    season: "NOW",
+   625→    title: "UNDIMENSION MANIFEST",
+   626→    description:
+   627→      "Web profile ini lahir sebagai konstanta digital. Tempat menyimpan kenangan, harapan, dan bukti bahwa tujuh orbit yang berbeda bisa tetap selaras.",
+   628→    color: "#00ff00",
+   629→    icon: "★",
+   630→  },
+   631→];
+   632→
+   633→export const RANDOM_QUOTES: { text: string; author: string }[] = [
+   634→  { text: "Chaos is just order you haven't understood yet.", author: "THE COLLECTIVE" },
+   635→  { text: "Tujuh orbit, satu gravitasi. Itu cukup.", author: "ALDI" },
+   636→  { text: "Kalau kita tidak saling menyalahkan di ranked, kita bukan teman.", author: "REZA" },
+   637→  { text: "Build dulu, fikir nanti. Itu filosofi kami.", author: "RAZKA" },
+   638→  { text: "Yang penting bunyi 'oof'-nya keras.", author: "RASYA" },
+   639→  { text: "Roll for initiative. Roll for friendship. Critical hit.", author: "ABYAN" },
+   640→  { text: "Aku ghosting grup 3 bulan, balik dan seolah tak terjadi apa-apa. Itu persahabatan.", author: "RIFQI" },
+   641→  { text: "Tanpa drama, hidup terlalu sunyi. Aku sediakan dramanya.", author: "DUDIT" },
+   642→];
+   643→
+   644→// Member × Game compatibility matrix (who plays what)
+   645→// Values: 3 = main/frequent, 2 = casual, 1 = rare, 0 = no
+   646→export const COMPATIBILITY: Record<string, Record<string, number>> = {
+   647→  aldi:  { minecraft: 3, roblox: 2, ml: 2, dnd: 1 },
+   648→  razka: { minecraft: 3, roblox: 1, ml: 2, dnd: 3 },
+   649→  reza:  { minecraft: 2, roblox: 1, ml: 3, dnd: 3 },
+   650→  abyan: { minecraft: 2, roblox: 2, ml: 3, dnd: 1 },
+   651→  rasya: { minecraft: 3, roblox: 3, ml: 2, dnd: 2 },
+   652→  rifqi: { minecraft: 1, roblox: 2, ml: 1, dnd: 2 },
+   653→  dudit: { minecraft: 2, roblox: 3, ml: 3, dnd: 2 },
+   654→};
+   655→
+   656→export const GAME_LABELS: Record<string, string> = {
+   657→  minecraft: "MINECRAFT",
+   658→  roblox: "ROBLOX",
+   659→  ml: "MOBILE LEGENDS",
+   660→  dnd: "D&D",
+   661→};
+   662→
+   663→// Cosmic coordinates for each member — their "position" on the collective star map.
+   664→// x/y in 0-100 range (percentage of the map), size = star magnitude, constellation = which group.
+   665→export type CosmicCoord = {
+   666→  id: string;
+   667→  nick: string;
+   668→  x: number;
+   669→  y: number;
+   670→  size: number;
+   671→  color: string;
+   672→  element: string;
+   673→};
+   674→
+   675→export const COSMIC_COORDS: CosmicCoord[] = [
+   676→  { id: "aldi",  nick: "ALDI",   x: 50, y: 18, size: 5, color: "#ff4d4d", element: "FIRE" },
+   677→  { id: "razka", nick: "REMBO",  x: 22, y: 38, size: 4, color: "#00e5ff", element: "ICE" },
+   678→  { id: "reza",  nick: "EJA",    x: 78, y: 35, size: 4, color: "#d4ff00", element: "MIND" },
+   679→  { id: "abyan", nick: "BYAN",   x: 15, y: 62, size: 4.5, color: "#ff00ff", element: "STORM" },
+   680→  { id: "rasya", nick: "ACONG",  x: 85, y: 65, size: 4.5, color: "#ff8c00", element: "CHAOS" },
+   681→  { id: "rifqi", nick: "TIPKI",  x: 35, y: 82, size: 3.5, color: "#00ff00", element: "VOID" },
+   682→  { id: "dudit", nick: "DUDIT",  x: 65, y: 80, size: 4, color: "#8a2be2", element: "ENERGY" },
+   683→];
+   684→
+   685→// Lines connecting the stars into a "constellation" (pairs of member ids)
+   686→export const CONSTELLATION_LINES: [string, string][] = [
+   687→  ["aldi", "razka"],
+   688→  ["aldi", "reza"],
+   689→  ["razka", "abyan"],
+   690→  ["reza", "rasya"],
+   691→  ["abyan", "rifqi"],
+   692→  ["rasya", "dudit"],
+   693→  ["rifqi", "dudit"],
+   694→  ["razka", "reza"],
+   695→];
+   696→
+   697→// Portfolio projects — showcase of programming work by the collective
+   698→export type PortfolioProject = {
+   699→  id: string;
+   700→  title: string;
+   701→  description: string;
+   702→  tech: string[];
+   703→  category: "WEB" | "GAME" | "MOBILE" | "TOOL" | "BOT" | "OTHER";
+   704→  status: "LIVE" | "WIP" | "ARCHIVED";
+   705→  year: string;
+   706→  author: string;
+   707→  link?: string;
+   708→  repo?: string;
+   709→  color: string;
+   710→};
+   711→
+   712→export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
+   713→  {
+   714→    id: "p1",
+   715→    title: "UNDIMENSION WEB",
+   716→    description: "Web profile collective ini. Neo-brutalism design, 11 section interaktif, chaos mode, synthesized SFX, dan paginated gallery carousel. Full-stack Next.js 16 + Prisma.",
+   717→    tech: ["Next.js 16", "TypeScript", "Tailwind 4", "Prisma", "sharp", "framer-motion"],
+   718→    category: "WEB",
+   719→    status: "LIVE",
+   720→    year: "2026",
+   721→    author: "RAZKA",
+   722→    link: "#",
+   723→    repo: "https://github.com/raynzz455/Undimesion-prototype",
+   724→    color: "#ff4d4d",
+   725→  },
+   726→  {
+   727→    id: "p2",
+   728→    title: "MINECRAFT MOD PACK",
+   729→    description: "Custom modpack untuk server private collective. Berisi 47 mod yang dipilih manual, config di-tune untuk survival chaos bareng.",
+   730→    tech: ["Java", "Forge", "JSON", "Minecraft"],
+   731→    category: "GAME",
+   732→    status: "ARCHIVED",
+   733→    year: "2022",
+   734→    author: "ALDI",
+   735→    color: "#00e5ff",
+   736→  },
+   737→  {
+   738→    id: "p3",
+   739→    title: "ML DRAFT ANALYZER",
+   740→    description: "Tool web untuk analisis draft Mobile Legends. Input composition musuh → output rekomendasi pick. Pakai data hero API.",
+   741→    tech: ["React", "Node.js", "REST API"],
+   742→    category: "TOOL",
+   743→    status: "ARCHIVED",
+   744→    year: "2023",
+   745→    author: "REZA",
+   746→    color: "#d4ff00",
+   747→  },
+   748→  {
+   749→    id: "p4",
+   750→    title: "DISCORD CHAOS BOT",
+   751→    description: "Bot Discord untuk server collective. Fitur: random game picker, schedule reminder, sound effect player, dan meme generator dari screenshot.",
+   752→    tech: ["Node.js", "discord.js", "SQLite"],
+   753→    category: "BOT",
+   754→    status: "LIVE",
+   755→    year: "2024",
+   756→    author: "DUDIT",
+   757→    color: "#ff00ff",
+   758→  },
+   759→  {
+   760→    id: "p5",
+   761→    title: "D&D DICE ROLLER PWA",
+   762→    description: "Progressive Web App untuk roll dadu D&D. Support d4/d6/d8/d10/d12/d20/d100, advantage/disadvantage, dan history log. Installable di HP.",
+   763→    tech: ["React", "PWA", "Service Worker"],
+   764→    category: "WEB",
+   765→    status: "LIVE",
+   766→    year: "2024",
+   767→    author: "ABYAN",
+   768→    color: "#ff8c00",
+   769→  },
+   770→  {
+   771→    id: "p6",
+   772→    title: "OBBY SPEEDRUN TRACKER",
+   773→    description: "Web app untuk track speedrun time obby Roblox. Leaderboard, video proof link, dan auto-timer. Kompetisi internal collective.",
+   774→    tech: ["Next.js", "Prisma", "YouTube API"],
+   775→    category: "WEB",
+   776→    status: "WIP",
+   777→    year: "2025",
+   778→    author: "RASYA",
+   779→    color: "#00ff00",
+   780→  },
+   781→  {
+   782→    id: "p7",
+   783→    title: "SCREENSHOT ARCHIVER",
+   784→    description: "CLI tool untuk auto-organize screenshot berdasarkan tanggal + game. Convert ke WebP, compress, upload ke cloud. Dipakai untuk arip 4000+ screenshot.",
+   785→    tech: ["Python", "Pillow", "CLI"],
+   786→    category: "TOOL",
+   787→    status: "LIVE",
+   788→    year: "2023",
+   789→    author: "RAZKA",
+   790→    color: "#8a2be2",
+   791→  },
+   792→  {
+   793→    id: "p8",
+   794→    title: "GHOST PRESENCE BOT",
+   795→    description: "Bot yang bikin akun Discord 'online' walau user ga main. Random status message, reaction time simulator, dan auto-reply chaos.",
+   796→    tech: ["Python", "discord.py", "cron"],
+   797→    category: "BOT",
+   798→    status: "ARCHIVED",
+   799→    year: "2024",
+   800→    author: "RIFQI",
+   801→    color: "#ff4d4d",
+   802→  },
+   803→  {
+   804→    id: "p9",
+   805→    title: "SMK REUNION INVITE SITE",
+   806→    description: "Landing page undangan reuni SMK. Countdown timer, RSVP form, gallery foto lama, dan peta lokasi. Dikirim ke 50+ alumni.",
+   807→    tech: ["HTML/CSS", "JavaScript", "Google Maps API"],
+   808→    category: "WEB",
+   809→    status: "ARCHIVED",
+   810→    year: "2025",
+   811→    author: "ALDI",
+   812→    color: "#00e5ff",
+   813→  },
+   814→];
+   815→
+   816→export const PORTFOLIO_CATEGORIES = ["ALL", "WEB", "GAME", "MOBILE", "TOOL", "BOT", "OTHER"] as const;
+   817→

@@ -24,6 +24,7 @@ model Member {
   color           String
   highlight       String
   bio             String
+  bioPortfolio    String?
   tagline         String   @default("")
   quote           String   @default("")
   funFactsJson    String   @default("[]")
@@ -64,6 +65,7 @@ model MemberProfileHistory {
   color           String
   highlight       String
   bio             String
+  bioPortfolio    String?
   tagline         String   @default("")
   quote           String   @default("")
   funFactsJson    String   @default("[]")

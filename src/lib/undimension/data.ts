@@ -36,6 +36,7 @@ export type Member = {
   color: string; // bg-* utility
   highlight: string; // text-* utility
   bio: string;
+  bioPortfolio?: string;
   tagline: string; // short punchy one-liner for modal
   quote: string; // a personal quote shown in modal
   funFacts: string[]; // 3-4 bullet facts

@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { StarField } from "./star-field";
-import { StarGraphic, Marquee } from "./primitives";
+import { StarGraphic, Marquee, BioText } from "./primitives";
 import { MemberDetailModal } from "./member-detail-modal";
 import { UnavailablePhoto } from "./unavailable-photo";
 import { GuestbookSection } from "./guestbook-section";
@@ -183,7 +183,7 @@ function MemberCard({ m, i, onOpen }: { m: Member; i: number; onOpen: () => void
               {m.role}
             </h4>
             <p className="font-outfit font-bold text-xl text-black dark:text-white leading-relaxed">
-              {m.bio}{" "}
+              <BioText>{m.bio}</BioText>{" "}
               <span className={m.highlight}>
                 Ini bukan sekadar julukan, ini adalah cara ia bertahan hidup di
                 kerasnya realita virtual dan nyata.

@@ -117,6 +117,7 @@ function MembersTab() {
   const [color, setColor] = useState("#ff4d4d");
   const [highlight, setHighlight] = useState("#ff4d4d");
   const [bio, setBio] = useState("");
+  const [bioPortfolio, setBioPortfolio] = useState("");
   const [tagline, setTagline] = useState("");
   const [quote, setQuote] = useState("");
   const [element, setElement] = useState("");
@@ -155,7 +156,7 @@ function MembersTab() {
     setName(m.name); setNick(m.nick); setRole(m.role); setImg(m.img);
     const extractHex = (cls: string) => { const match = cls.match(/#([0-9a-fA-F]{3,8})/); return match ? `#${match[1]}` : "#ff4d4d"; };
     setColor(extractHex(m.color)); setHighlight(extractHex(m.highlight));
-    setBio(m.bio); setTagline(m.tagline || ""); setQuote(m.quote || "");
+    setBio(m.bio); setBioPortfolio(m.bioPortfolio || ""); setTagline(m.tagline || ""); setQuote(m.quote || "");
     setElement(m.element || ""); setJoinYear(m.joinYear || "2020");
     setStats(Array.from({ length: 6 }, (_, i) => ({ label: m.stats?.[i]?.label ?? ["STR","DEX","CON","INT","WIS","CHA"][i] ?? "", value: m.stats?.[i]?.value ?? "10" })));
     setSocials(Array.from({ length: 3 }, (_, i) => ({ label: m.socials?.[i]?.label ?? "", href: m.socials?.[i]?.href ?? "" })));
@@ -177,7 +178,7 @@ function MembersTab() {
       const payload = {
         name: name.trim(), nick: nick.trim(), role: role.trim(), img: img.trim(),
         color: `bg-[${color}]`, highlight: `text-[${highlight}]`,
-        bio: bio.trim(), tagline: tagline.trim(), quote: quote.trim(),
+        bio: bio.trim(), bioPortfolio: bioPortfolio.trim(), tagline: tagline.trim(), quote: quote.trim(),
         element: element.trim().toUpperCase(), joinYear: joinYear.trim(),
         stats: stats.filter((s) => s.label && s.value),
         socials: socials.filter((s) => s.label && s.href), funFacts,
@@ -281,6 +282,7 @@ function MembersTab() {
           <span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">BIO</span>
           <span className="font-mono-ud text-[10px] text-[#d4ff00]/60 block mb-1">▸ Tip: Wrap teks dengan **double asterisk** untuk warna highlight.</span>
           <textarea value={bio} onChange={(e) => setBio(e.target.value.slice(0, 2000))} rows={4} placeholder="Bio member. Gunakan **teks** untuk highlight." className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm resize-none focus:outline-none focus:border-[#ff00ff]" />
+          <textarea value={bioPortfolio} onChange={(e) => setBioPortfolio(e.target.value.slice(0, 500))} placeholder="BIO PORTFOLIO (optional — shown on portfolio page below normal bio)" rows={3} className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm resize-none focus:outline-none focus:border-[#ff00ff]" />
         </label>
         <label className="block mb-3"><span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">TAGLINE</span><input value={tagline} onChange={(e) => setTagline(e.target.value.slice(0, 200))} className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
         <label className="block mb-3"><span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">QUOTE</span><textarea value={quote} onChange={(e) => setQuote(e.target.value.slice(0, 600))} rows={2} className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm resize-none focus:outline-none focus:border-[#ff00ff]" /></label>

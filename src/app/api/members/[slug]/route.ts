@@ -123,7 +123,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ slug: strin
 
   // ── Build update data ──
   const data: Record<string, unknown> = {};
-  const stringFields = ["name", "nick", "role", "img", "color", "highlight", "bio", "tagline", "quote", "element", "joinYear", "taglineCareer", "location", "availability"];
+  const stringFields = ["name", "nick", "role", "img", "color", "highlight", "bio", "bioPortfolio", "tagline", "quote", "element", "joinYear", "taglineCareer", "location", "availability"];
   for (const f of stringFields) {
     if (body[f] !== undefined) data[f] = String(body[f]).trim().slice(0, 2000);
   }

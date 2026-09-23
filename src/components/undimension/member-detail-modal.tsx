@@ -8,6 +8,7 @@ import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useSfx } from "@/hooks/use-sfx";
 import { cn } from "@/lib/utils";
 import { UnavailablePhoto } from "./unavailable-photo";
+import { BioText } from "./primitives";
 
 export function MemberDetailModal({
   member,
@@ -174,7 +175,7 @@ export function MemberDetailModal({
 
               {/* Bio */}
               <p className="font-outfit text-base md:text-lg leading-relaxed font-medium">
-                {member.bio}
+                <BioText>{member.bio}</BioText>
               </p>
 
               {/* Quote */}

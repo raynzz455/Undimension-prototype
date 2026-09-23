@@ -1,0 +1,671 @@
+     1→"use client";
+     2→
+     3→import { useState, useMemo, useEffect, useRef } from "react";
+     4→import { motion, AnimatePresence } from "framer-motion";
+     5→import { StarField } from "./star-field";
+     6→import { StarGraphic } from "./primitives";
+     7→import { MEMBERS, type Member, type PortfolioProject } from "@/lib/undimension/data";
+     8→import { useChaos } from "./chaos-provider";
+     9→import { MEMBER_CV } from "@/lib/undimension/cv-data";
+    10→import { useScrollReveal } from "@/hooks/use-scroll-reveal";
+    11→import { useSfx } from "@/hooks/use-sfx";
+    12→import { useFetch } from "@/hooks/use-fetch";
+    13→import { cn } from "@/lib/utils";
+    14→import {
+    15→  Github, ExternalLink, Code2, Gamepad2, Smartphone, Wrench, Bot, Package,
+    16→  Briefcase, GraduationCap, Award, MapPin, Clock, ChevronLeft, ChevronRight,
+    17→  X, Trophy,
+    18→} from "lucide-react";
+    19→import { UnavailablePhoto } from "./unavailable-photo";
+    20→import type { Achievement } from "@/lib/undimension/data";
+    21→import { useFocusTrap } from "@/hooks/use-focus-trap";
+    22→
+    23→const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+    24→  WEB: Code2,
+    25→  GAME: Gamepad2,
+    26→  MOBILE: Smartphone,
+    27→  TOOL: Wrench,
+    28→  BOT: Bot,
+    29→  OTHER: Package,
+    30→};
+    31→
+    32→const STATUS_COLORS: Record<string, string> = {
+    33→  LIVE: "#00ff00",
+    34→  WIP: "#ff8c00",
+    35→  ARCHIVED: "#666666",
+    36→};
+    37→
+    38→const AVAILABILITY_COLORS: Record<string, string> = {
+    39→  "EMPLOYED": "#00e5ff",
+    40→  "OPEN TO WORK": "#00ff00",
+    41→  "FREELANCE": "#ff00ff",
+    42→};
+    43→
+    44→const SKILL_CATEGORY_COLORS: Record<string, string> = {
+    45→  LANGUAGE: "#ff4d4d",
+    46→  FRAMEWORK: "#00e5ff",
+    47→  TOOL: "#d4ff00",
+    48→  SOFT: "#ff00ff",
+    49→};
+    50→
+    51→function MemberSelector({
+    52→  members,
+    53→  selectedId,
+    54→  onSelect,
+    55→}: {
+    56→  members: Member[];
+    57→  selectedId: string;
+    58→  onSelect: (id: string) => void;
+    59→}) {
+    60→  const { play } = useSfx();
+    61→  return (
+    62→    <div className="flex flex-wrap gap-2 mb-8">
+    63→      {members.map((m) => {
+    64→        const active = m.id === selectedId;
+    65→        return (
+    66→          <button
+    67→            key={m.id}
+    68→            onClick={() => { play("click"); onSelect(m.id); }}
+    69→            className={cn(
+    70→              "flex items-center gap-2 px-3 py-2 border-4 border-black dark:border-white font-bebas text-lg tracking-wider transition-all no-color-transition",
+    71→              active ? "text-white shadow-[4px_4px_0_#000] dark:shadow-[4px_4px_0_#fff] scale-105" : "bg-white dark:bg-black text-black dark:text-white hover:-translate-y-0.5",
+    72→            )}
+    73→            style={active ? { backgroundColor: m.color.replace("bg-[", "").replace("]", "") } : undefined}
+    74→          >
+    75→            <span
+    76→              className="w-3 h-3 border-2 border-black dark:border-white flex-shrink-0"
+    77→              style={{ backgroundColor: m.color.replace("bg-[", "").replace("]", "") }}
+    78→            />
+    79→            {m.nick.toUpperCase()}
+    80→          </button>
+    81→        );
+    82→      })}
+    83→    </div>
+    84→  );
+    85→}
+    86→
+    87→function SkillBar({ name, level, category }: { name: string; level: number; category: string }) {
+    88→  const color = SKILL_CATEGORY_COLORS[category] || "#fff";
+    89→  return (
+    90→    <div className="flex items-center gap-3">
+    91→      <span className="font-mono-ud text-xs font-bold text-black/60 dark:text-white/60 min-w-[80px] tracking-wider flex-shrink-0">
+    92→        {category}
+    93→      </span>
+    94→      <span className="font-mono-ud text-sm font-bold text-black dark:text-white min-w-[100px] truncate flex-shrink-0">
+    95→        {name}
+    96→      </span>
+    97→      <div className="flex-1 min-w-[60px] h-3 border-2 border-black dark:border-white bg-white dark:bg-black overflow-hidden">
+    98→        <motion.div
+    99→          className="h-full"
+   100→          style={{ backgroundColor: color }}
+   101→          initial={{ width: 0 }}
+   102→          whileInView={{ width: `${level}%` }}
+   103→          viewport={{ once: true }}
+   104→          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+   105→        />
+   106→      </div>
+   107→      <span className="font-mono-ud text-sm font-black w-8 text-right" style={{ color }}>
+   108→        {level}
+   109→      </span>
+   110→    </div>
+   111→  );
+   112→}
+   113→
+   114→function ProjectMini({ p }: { p: PortfolioProject }) {
+   115→  const Icon = CATEGORY_ICONS[p.category] || Package;
+   116→  const statusColor = STATUS_COLORS[p.status];
+   117→  return (
+   118→    <div className="border-4 border-black dark:border-white bg-white dark:bg-[#1a1a1a] p-4 shadow-[4px_4px_0_#000] dark:shadow-[4px_4px_0_#fff] hover:-translate-y-1 transition-transform group">
+   119→      <div className="flex items-start justify-between gap-2 mb-2">
+   120→        <div
+   121→          className="w-10 h-10 flex items-center justify-center border-2 border-black dark:border-white flex-shrink-0"
+   122→          style={{ backgroundColor: p.color }}
+   123→        >
+   124→          <Icon className="w-5 h-5 text-black" />
+   125→        </div>
+   126→        <span
+   127→          className="font-mono-ud text-xs font-black px-1.5 py-0.5 border"
+   128→          style={{ color: statusColor, borderColor: statusColor }}
+   129→        >
+   130→          {p.status}
+   131→        </span>
+   132→      </div>
+   133→      <h4 className="font-bebas text-xl text-black dark:text-white leading-none mb-1">{p.title}</h4>
+   134→      <p className="font-mono-ud text-sm text-black/60 dark:text-white/60 mb-2 line-clamp-2">{p.description}</p>
+   135→      <div className="flex flex-wrap gap-1 mb-2">
+   136→        {p.tech.map((t) => (
+   137→          <span key={t} className="font-mono-ud text-xs font-bold px-1 py-0.5 border border-black dark:border-white bg-black/5 dark:bg-white/5 text-black dark:text-white">
+   138→            {t}
+   139→          </span>
+   140→        ))}
+   141→      </div>
+   142→      <div className="flex items-center justify-between border-t-2 border-black dark:border-white pt-2">
+   143→        <span className="font-mono-ud text-sm text-black/50 dark:text-white/50">{p.year}</span>
+   144→        <div className="flex gap-1">
+   145→          {p.repo && (
+   146→            <a href={p.repo} target="_blank" rel="noopener noreferrer" className="w-6 h-6 flex items-center justify-center bg-black dark:bg-white text-white dark:text-black border border-black dark:border-white hover:bg-[#d4ff00] hover:text-black transition-colors">
+   147→              <Github className="w-3 h-3" />
+   148→            </a>
+   149→          )}
+   150→          {p.link && (
+   151→            <a href={p.link} target="_blank" rel="noopener noreferrer" className="w-6 h-6 flex items-center justify-center bg-[#00e5ff] text-black border border-black dark:border-white hover:bg-[#ff4d4d] hover:text-white transition-colors">
+   152→              <ExternalLink className="w-3 h-3" />
+   153→            </a>
+   154→          )}
+   155→        </div>
+   156→      </div>
+   157→    </div>
+   158→  );
+   159→}
+   160→
+   161→function AchievementImageCarousel({ images, color }: { images: string[]; color: string }) {
+   162→  const [idx, setIdx] = useState(0);
+   163→
+   164→  const next = () => setIdx((p) => (p + 1) % images.length);
+   165→  const prev = () => setIdx((p) => (p - 1 + images.length) % images.length);
+   166→
+   167→  return (
+   168→    <div className="mb-4 border-4 border-black dark:border-white bg-black overflow-hidden relative">
+   169→      <div className="font-mono-ud text-sm font-black tracking-[0.2em] uppercase text-white/60 px-3 py-1 border-b-2 border-white/20 flex items-center justify-between">
+   170→        <span>▸ EVIDENCE / CERTIFICATE</span>
+   171→        <span>{idx + 1}/{images.length}</span>
+   172→      </div>
+   173→      <div className="relative aspect-[4/3] overflow-hidden">
+   174→        <img
+   175→          src={images[idx]}
+   176→          alt={`Achievement evidence ${idx + 1}`}
+   177→          className="w-full h-full object-cover"
+   178→          key={idx}
+   179→        />
+   180→        <div className="absolute inset-0 ud-scanlines opacity-20 pointer-events-none" />
+   181→        {images.length > 1 && (
+   182→          <>
+   183→            <button
+   184→              onClick={prev}
+   185→              className="absolute left-1 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-black/70 border-2 border-white text-white hover:bg-white hover:text-black transition-colors"
+   186→              aria-label="Previous image"
+   187→            >
+   188→              <ChevronLeft className="w-4 h-4" />
+   189→            </button>
+   190→            <button
+   191→              onClick={next}
+   192→              className="absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-black/70 border-2 border-white text-white hover:bg-white hover:text-black transition-colors"
+   193→              aria-label="Next image"
+   194→            >
+   195→              <ChevronRight className="w-4 h-4" />
+   196→            </button>
+   197→          </>
+   198→        )}
+   199→      </div>
+   200→      {/* Dots */}
+   201→      {images.length > 1 && (
+   202→        <div className="flex justify-center gap-1 py-1.5 bg-black">
+   203→          {images.map((_, i) => (
+   204→            <button
+   205→              key={i}
+   206→              onClick={() => setIdx(i)}
+   207→              className={cn(
+   208→                "w-2 h-2 border border-white transition-colors",
+   209→                i === idx ? "bg-white" : "bg-transparent",
+   210→              )}
+   211→              aria-label={`Go to image ${i + 1}`}
+   212→            />
+   213→          ))}
+   214→        </div>
+   215→      )}
+   216→    </div>
+   217→  );
+   218→}
+   219→
+   220→function AchievementModal({
+   221→  achievement,
+   222→  memberColor,
+   223→  onClose,
+   224→}: {
+   225→  achievement: Achievement | null;
+   226→  memberColor: string;
+   227→  onClose: () => void;
+   228→}) {
+   229→  const open = achievement !== null;
+   230→  const panelRef = useRef<HTMLDivElement>(null);
+   231→  useFocusTrap(panelRef, open);
+   232→
+   233→  useEffect(() => {
+   234→    if (!open) return;
+   235→    const onKey = (e: KeyboardEvent) => {
+   236→      if (e.key === "Escape") {
+   237→        document.body.classList.remove("modal-open");
+   238→        onClose();
+   239→      }
+   240→    };
+   241→    window.addEventListener("keydown", onKey);
+   242→    return () => window.removeEventListener("keydown", onKey);
+   243→  }, [open, onClose]);
+   244→
+   245→  // Hide navbar when modal is open
+   246→  useEffect(() => {
+   247→    if (open) {
+   248→      document.body.classList.add("modal-open");
+   249→    } else {
+   250→      document.body.classList.remove("modal-open");
+   251→    }
+   252→    return () => { document.body.classList.remove("modal-open"); };
+   253→  }, [open]);
+   254→
+   255→  return (
+   256→    <AnimatePresence>
+   257→      {open && achievement && (
+   258→        <motion.div
+   259→          className="fixed inset-0 z-[85] flex items-center justify-center p-4 md:p-8"
+   260→          initial={{ opacity: 0 }}
+   261→          animate={{ opacity: 1 }}
+   262→          exit={{ opacity: 0 }}
+   263→          transition={{ duration: 0.2 }}
+   264→        >
+   265→          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+   266→
+   267→          {/* Relative wrapper */}
+   268→          <div className="relative w-full max-w-md">
+   269→            {/* X Close */}
+   270→            <button
+   271→              onClick={onClose}
+   272→              className="absolute -top-4 -right-4 z-30 w-10 h-10 flex items-center justify-center bg-[#ff4d4d] text-white border-4 border-black dark:border-white shadow-[4px_4px_0_#000] dark:shadow-[4px_4px_0_#fff] hover:rotate-90 transition-transform no-color-transition"
+   273→              aria-label="Close"
+   274→            >
+   275→              <X className="w-5 h-5" />
+   276→            </button>
+   277→
+   278→          <motion.div
+   279→            ref={panelRef}
+   280→            role="dialog"
+   281→            aria-modal="true"
+   282→            aria-labelledby="ud-achievement-title"
+   283→            tabIndex={-1}
+   284→            className="relative w-full max-h-[90vh] overflow-y-auto border-8 border-black dark:border-white bg-white dark:bg-[#09090b] shadow-[8px_8px_0_#000] md:shadow-[16px_16px_0_#000] dark:md:shadow-[16px_16px_0_#d4ff00] outline-none"
+   285→            initial={{ scale: 0.85, y: 30, rotate: -2 }}
+   286→            animate={{ scale: 1, y: 0, rotate: 0 }}
+   287→            exit={{ scale: 0.85, y: 30, rotate: -2 }}
+   288→            transition={{ type: "spring", stiffness: 300, damping: 24 }}
+   289→            onAnimationComplete={() => {
+   290→              if (panelRef.current) panelRef.current.scrollTop = 0;
+   291→            }}
+   292→          >
+   293→
+   294→            {/* Colored header banner */}
+   295→            <div className="p-6 border-b-8 border-black dark:border-white" style={{ backgroundColor: memberColor }}>
+   296→              <div className="flex items-center justify-center mb-2">
+   297→                <div className="w-16 h-16 flex items-center justify-center bg-black border-4 border-black">
+   298→                  <Trophy className="w-8 h-8 text-white" />
+   299→                </div>
+   300→              </div>
+   301→              <div className="font-mono-ud text-sm font-black tracking-[0.3em] uppercase text-black/60 text-center">
+   302→                ▸ ACHIEVEMENT UNLOCKED
+   303→              </div>
+   304→            </div>
+   305→
+   306→            {/* Body */}
+   307→            <div className="p-6">
+   308→              <h3
+   309→                id="ud-achievement-title"
+   310→                className="font-bebas text-4xl md:text-5xl text-black dark:text-white leading-none mb-2 text-center"
+   311→              >
+   312→                {achievement.title}
+   313→              </h3>
+   314→              <div className="font-mono-ud text-xs font-black text-black/50 dark:text-white/50 tracking-widest mb-4 text-center">
+   315→                ◆ {achievement.year} ◆
+   316→              </div>
+   317→              <div className="border-4 border-black dark:border-white bg-black dark:bg-white p-4 mb-4">
+   318→                <p className="font-mono-ud text-sm text-white dark:text-black leading-relaxed text-center">
+   319→                  {achievement.description}
+   320→                </p>
+   321→              </div>
+   322→              {/* Achievement photo carousel (sertifikat, medali, foto kemenangan) */}
+   323→              {achievement.images && achievement.images.length > 0 && (
+   324→                <AchievementImageCarousel images={achievement.images} color={memberColor} />
+   325→              )}
+   326→            </div>
+   327→          </motion.div>
+   328→          </div>
+   329→        </motion.div>
+   330→      )}
+   331→    </AnimatePresence>
+   332→  );
+   333→}
+   334→
+   335→function MemberPortfolio({ member }: { member: Member }) {
+   336→  const staticCv = MEMBER_CV[member.id];
+   337→  const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
+   338→  const { play } = useSfx();
+   339→
+   340→  // Fetch DB achievements for this member (with images)
+   341→  const { data: achievementsData } = useFetch<{ achievements: { id: string; memberId: string; title: string; year: string; description: string; images: { id: string; img: string }[] }[] }>(`/api/achievements?memberId=${member.id}`);
+   342→
+   343→  const workHistory = member.workHistory?.length ? member.workHistory : (staticCv?.workHistory || []);
+   344→  const education = member.education?.length ? member.education : (staticCv?.education || []);
+   345→  const skills = member.skills?.length ? member.skills : (staticCv?.skills || []);
+   346→  const taglineCareer = member.taglineCareer || staticCv?.taglineCareer || "";
+   347→  const location = member.location || staticCv?.location || "";
+   348→  const availability = member.availability || staticCv?.availability || "EMPLOYED";
+   349→  const projects = staticCv?.projects || [];
+   350→
+   351→  if (!staticCv && !member.workHistory && !member.education) return null;
+   352→
+   353→  // Merge: DB achievements (with photos) + static CV achievements.
+   354→  // DB returns { id, img }[] for images; flatten to URL strings for the
+   355→  // Achievement type (which expects string[] for carousel display).
+   356→  const dbAchievements: Achievement[] = (achievementsData?.achievements ?? []).map((a) => ({
+   357→    title: a.title,
+   358→    year: a.year,
+   359→    description: a.description,
+   360→    images: a.images.map((img) => img.img),
+   361→  }));
+   362→  const allAchievements = [...dbAchievements, ...(staticCv?.achievements || [])];
+   363→
+   364→  const memberColor = member.color.replace("bg-[", "").replace("]", "");
+   365→  const availColor = AVAILABILITY_COLORS[availability] || "#00e5ff";
+   366→
+   367→  return (
+   368→    <AnimatePresence mode="wait">
+   369→      <motion.div
+   370→        key={member.id}
+   371→        initial={{ opacity: 0, y: 20 }}
+   372→        animate={{ opacity: 1, y: 0 }}
+   373→        exit={{ opacity: 0, y: -20 }}
+   374→        transition={{ duration: 0.3 }}
+   375→        className="space-y-6"
+   376→      >
+   377→        {/* Header card */}
+   378→        <div className="border-8 border-black dark:border-white bg-white dark:bg-[#09090b] shadow-[12px_12px_0_#000] dark:shadow-[12px_12px_0_#fff] overflow-hidden">
+   379→          <div className={cn("p-6 md:p-8 border-b-8 border-black dark:border-white", member.color)}>
+   380→            <div className="flex flex-col md:flex-row gap-6 items-start">
+   381→              {/* Big Photo */}
+   382→              <div className="border-8 border-black bg-black p-2 shadow-[12px_12px_0_#000] flex-shrink-0 w-full md:w-64 lg:w-72 relative">
+   383→                {member.img ? (
+   384→                  <img
+   385→                    src={member.img}
+   386→                    alt={member.nick}
+   387→                    className="w-full aspect-[4/5] object-cover"
+   388→                  />
+   389→                ) : (
+   390→                  <div className="w-full aspect-[4/5]">
+   391→                    <UnavailablePhoto
+   392→                      label={`NO PHOTO — ${member.nick.toUpperCase()}`}
+   393→                      nick={member.nick}
+   394→                      color={(member.color.match(/#[0-9a-fA-F]{6}/) || ["#ff8c00"])[0]}
+   395→                    />
+   396→                  </div>
+   397→                )}
+   398→                <div className="absolute inset-2 ud-scanlines opacity-30 pointer-events-none" />
+   399→                {/* Nick sticker */}
+   400→                <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-[#ffea00] border-4 border-black px-6 py-1.5 font-mono-ud font-black text-black text-2xl shadow-[4px_4px_0_#000] -rotate-2 whitespace-nowrap">
+   401→                  &ldquo;{member.nick.toUpperCase()}&rdquo;
+   402→                </div>
+   403→              </div>
+   404→              {/* Info */}
+   405→              <div className="flex-1 text-black pt-4 md:pt-0">
+   406→                <div className="flex items-center gap-2 mb-2 flex-wrap">
+   407→                  <span className="font-mono-ud text-xs font-black bg-black text-white px-2 py-1 border-2 border-black">
+   408→                    ID_{member.id.toUpperCase()}
+   409→                  </span>
+   410→                  <span
+   411→                    className="font-mono-ud text-xs font-black px-2 py-1 border-2 border-black"
+   412→                    style={{ backgroundColor: availColor, color: "#000" }}
+   413→                  >
+   414→                    ● {availability}
+   415→                  </span>
+   416→                </div>
+   417→                <h2 className="font-bebas text-5xl md:text-7xl leading-none">{member.name}</h2>
+   418→                <p className="font-mono-ud text-base md:text-lg font-bold mt-1">{taglineCareer}</p>
+   419→                <div className="flex items-center gap-4 mt-3 font-mono-ud text-sm md:text-base">
+   420→                  <span className="flex items-center gap-1"><MapPin className="w-4 h-4" />{location}</span>
+   421→                  <span className="flex items-center gap-1"><Clock className="w-4 h-4" />EST. {member.joinYear}</span>
+   422→                </div>
+   423→                <p className="font-outfit text-base md:text-xl mt-4 max-w-xl leading-relaxed">{member.bio}</p>
+   424→                {/* Socials */}
+   425→                {member.socials && member.socials.length > 0 && (
+   426→                  <div className="flex flex-wrap gap-2 mt-4">
+   427→                    {member.socials.map((s, i) => (
+   428→                      <a
+   429→                        key={i}
+   430→                        href={s.href && s.href !== "#" ? s.href : undefined}
+   431→                        target="_blank"
+   432→                        rel="noopener noreferrer"
+   433→                        className={cn(
+   434→                          "inline-flex items-center gap-1.5 px-3 py-1.5 border-2 border-black dark:border-white font-mono-ud text-xs md:text-sm font-bold transition-all no-color-transition",
+   435→                          s.href && s.href !== "#"
+   436→                            ? "bg-black text-white dark:bg-white dark:text-black hover:bg-[#ff4d4d] hover:text-white hover:border-[#ff4d4d]"
+   437→                            : "bg-black/5 dark:bg-white/5 text-black/30 dark:text-white/30 cursor-default"
+   438→                        )}
+   439→                      >
+   440→                        {s.label}
+   441→                      </a>
+   442→                    ))}
+   443→                  </div>
+   444→                )}
+   445→              </div>
+   446→            </div>
+   447→          </div>
+   448→        </div>
+   449→
+   450→        {/* 2-col: Experience + Education */}
+   451→        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   452→          {/* Work History */}
+   453→          <div className="border-4 border-black dark:border-white bg-white dark:bg-[#1a1a1a] p-5 shadow-[6px_6px_0_#000] dark:shadow-[6px_6px_0_#fff]">
+   454→            <h3 className="font-bebas text-4xl text-black dark:text-white mb-4 flex items-center gap-2 border-b-4 border-black dark:border-white pb-2">
+   455→              <Briefcase className="w-6 h-6" style={{ color: memberColor }} />
+   456→              WORK EXPERIENCE
+   457→            </h3>
+   458→            <div className="space-y-4">
+   459→              {workHistory.map((w, i) => (
+   460→                <motion.div
+   461→                  key={i}
+   462→                  initial={{ opacity: 0, x: -10 }}
+   463→                  whileInView={{ opacity: 1, x: 0 }}
+   464→                  viewport={{ once: true }}
+   465→                  transition={{ delay: i * 0.1 }}
+   466→                  className="relative pl-4 border-l-2 border-black dark:border-white"
+   467→                >
+   468→                  {w.current && (
+   469→                    <span className="absolute -left-1.5 top-1 w-3 h-3 rounded-full border-2 border-black dark:border-white animate-pulse" style={{ backgroundColor: memberColor }} />
+   470→                  )}
+   471→                  <div className="flex items-baseline justify-between gap-2 flex-wrap">
+   472→                    <span className="font-bebas text-xl text-black dark:text-white leading-none">{w.role}</span>
+   473→                    <span className="font-mono-ud text-sm text-black/50 dark:text-white/50">{w.period}</span>
+   474→                  </div>
+   475→                  <p className="font-mono-ud text-xs font-bold" style={{ color: memberColor }}>{w.company}</p>
+   476→                  <p className="font-mono-ud text-sm text-black/70 dark:text-white/70 mt-1">{w.description}</p>
+   477→                </motion.div>
+   478→              ))}
+   479→            </div>
+   480→          </div>
+   481→
+   482→          {/* Education */}
+   483→          <div className="border-4 border-black dark:border-white bg-white dark:bg-[#1a1a1a] p-5 shadow-[6px_6px_0_#000] dark:shadow-[6px_6px_0_#fff]">
+   484→            <h3 className="font-bebas text-4xl text-black dark:text-white mb-4 flex items-center gap-2 border-b-4 border-black dark:border-white pb-2">
+   485→              <GraduationCap className="w-6 h-6" style={{ color: memberColor }} />
+   486→              EDUCATION
+   487→            </h3>
+   488→            <div className="space-y-4">
+   489→              {education.map((e, i) => (
+   490→                <motion.div
+   491→                  key={i}
+   492→                  initial={{ opacity: 0, x: -10 }}
+   493→                  whileInView={{ opacity: 1, x: 0 }}
+   494→                  viewport={{ once: true }}
+   495→                  transition={{ delay: i * 0.1 }}
+   496→                  className="relative pl-4 border-l-2 border-black dark:border-white"
+   497→                >
+   498→                  <div className="flex items-baseline justify-between gap-2 flex-wrap">
+   499→                    <span className="font-bebas text-xl text-black dark:text-white leading-none">{e.degree}</span>
+   500→                    <span className="font-mono-ud text-sm text-black/50 dark:text-white/50">{e.period}</span>
+   501→                  </div>
+   502→                  <p className="font-mono-ud text-xs font-bold" style={{ color: memberColor }}>{e.school}</p>
+   503→                  {e.description && <p className="font-mono-ud text-sm text-black/70 dark:text-white/70 mt-1">{e.description}</p>}
+   504→                </motion.div>
+   505→              ))}
+   506→            </div>
+   507→          </div>
+   508→        </div>
+   509→
+   510→        {/* Skills */}
+   511→        <div className="border-4 border-black dark:border-white bg-white dark:bg-[#1a1a1a] p-5 shadow-[6px_6px_0_#000] dark:shadow-[6px_6px_0_#fff]">
+   512→          <h3 className="font-bebas text-4xl text-black dark:text-white mb-4 flex items-center gap-2 border-b-4 border-black dark:border-white pb-2">
+   513→            <Code2 className="w-6 h-6" style={{ color: memberColor }} />
+   514→            SKILLS MATRIX
+   515→          </h3>
+   516→          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+   517→            {skills.map((s, i) => (
+   518→              <SkillBar key={i} name={s.name} level={s.level} category={s.category} />
+   519→            ))}
+   520→          </div>
+   521→          {/* Legend */}
+   522→          <div className="flex flex-wrap gap-3 mt-4 pt-3 border-t-2 border-black dark:border-white">
+   523→            {Object.entries(SKILL_CATEGORY_COLORS).map(([cat, color]) => (
+   524→              <div key={cat} className="flex items-center gap-1.5">
+   525→                <span className="w-3 h-3 border border-black dark:border-white" style={{ backgroundColor: color }} />
+   526→                <span className="font-mono-ud text-sm font-bold text-black/60 dark:text-white/60 tracking-wider">{cat}</span>
+   527→              </div>
+   528→            ))}
+   529→          </div>
+   530→        </div>
+   531→
+   532→        {/* Achievements */}
+   533→        <div className="border-4 border-black dark:border-white bg-white dark:bg-[#1a1a1a] p-5 shadow-[6px_6px_0_#000] dark:shadow-[6px_6px_0_#fff]">
+   534→          <h3 className="font-bebas text-4xl text-black dark:text-white mb-4 flex items-center gap-2 border-b-4 border-black dark:border-white pb-2">
+   535→            <Award className="w-6 h-6" style={{ color: memberColor }} />
+   536→            ACHIEVEMENTS
+   537→            <span className="ml-auto font-mono-ud text-sm text-black/40 dark:text-white/40">▸ CLICK TO EXPAND</span>
+   538→          </h3>
+   539→          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+   540→            {allAchievements.map((a, i) => (
+   541→              <motion.button
+   542→                key={i}
+   543→                initial={{ opacity: 0, scale: 0.9 }}
+   544→                whileInView={{ opacity: 1, scale: 1 }}
+   545→                viewport={{ once: true }}
+   546→                transition={{ delay: i * 0.1 }}
+   547→                whileHover={{ y: -4 }}
+   548→                onClick={() => { play("open"); setSelectedAchievement(a); }}
+   549→                className="border-2 border-black dark:border-white p-3 bg-black/5 dark:bg-white/5 text-left cursor-pointer hover:bg-black/10 dark:hover:bg-white/10 transition-colors relative group"
+   550→                style={{ borderLeftWidth: "4px", borderLeftColor: memberColor }}
+   551→              >
+   552→                <div className="flex items-start justify-between gap-1 mb-1">
+   553→                  <div className="font-bebas text-3xl text-black dark:text-white leading-none">{a.title}</div>
+   554→                  <div className="flex items-center gap-1">
+   555→                    {a.images && a.images.length > 0 && (
+   556→                      <span className="font-mono-ud text-xs font-black px-1 border border-black dark:border-white bg-[#d4ff00] text-black" title="Has photos">
+   557→                        📷 {a.images.length}
+   558→                      </span>
+   559→                    )}
+   560→                    <Trophy className="w-4 h-4 opacity-30 group-hover:opacity-100 transition-opacity" style={{ color: memberColor }} />
+   561→                  </div>
+   562→                </div>
+   563→                <div className="font-mono-ud text-sm text-black/50 dark:text-white/50 mb-1">{a.year}</div>
+   564→                <p className="font-mono-ud text-sm text-black/70 dark:text-white/70 leading-relaxed line-clamp-2">{a.description}</p>
+   565→              </motion.button>
+   566→            ))}
+   567→          </div>
+   568→        </div>
+   569→
+   570→        {/* Projects */}
+   571→        <div className="border-4 border-black dark:border-white bg-white dark:bg-[#1a1a1a] p-5 shadow-[6px_6px_0_#000] dark:shadow-[6px_6px_0_#fff]">
+   572→          <h3 className="font-bebas text-4xl text-black dark:text-white mb-4 flex items-center gap-2 border-b-4 border-black dark:border-white pb-2">
+   573→            <Package className="w-6 h-6" style={{ color: memberColor }} />
+   574→            PROJECTS ({projects.length})
+   575→          </h3>
+   576→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   577→            {projects.map((p) => (
+   578→              <ProjectMini key={p.id} p={p} />
+   579→            ))}
+   580→          </div>
+   581→        </div>
+   582→
+   583→        {/* Achievement popup modal */}
+   584→        <AchievementModal
+   585→          achievement={selectedAchievement}
+   586→          memberColor={memberColor}
+   587→          onClose={() => { play("close"); document.body.classList.remove("modal-open"); setSelectedAchievement(null); }}
+   588→        />
+   589→      </motion.div>
+   590→    </AnimatePresence>
+   591→  );
+   592→}
+   593→
+   594→export function PortfolioPage() {
+   595→  // Fetch members from API (DB-backed) with static fallback
+   596→  const { data: membersData } = useFetch<{ members: Member[] }>("/api/members");
+   597→  const { godMode } = useChaos();
+   598→  const HIDDEN_IDS = new Set(MEMBERS.filter((m) => m.hidden).map((m) => m.id));
+   599→  const allMembers = membersData?.members ?? MEMBERS;
+   600→  const members = allMembers.filter((m) => !HIDDEN_IDS.has(m.id) || godMode);
+   601→  const [selectedId, setSelectedId] = useState("aldi");
+   602→  useScrollReveal();
+   603→
+   604→  const selected = useMemo(() => members.find((m) => m.id === selectedId) ?? members[0] ?? MEMBERS[0]!, [selectedId, members]);
+   605→
+   606→  const goPrev = () => {
+   607→    const idx = members.findIndex((m) => m.id === selectedId);
+   608→    setSelectedId(members[(idx - 1 + members.length) % members.length].id);
+   609→  };
+   610→  const goNext = () => {
+   611→    const idx = members.findIndex((m) => m.id === selectedId);
+   612→    setSelectedId(members[(idx + 1) % members.length].id);
+   613→  };
+   614→
+   615→  return (
+   616→    <div className="page-enter bg-[#8a2be2]/10 dark:bg-[#09090b] pt-28 md:pt-36 pb-24 min-h-screen relative overflow-hidden">
+   617→      <StarField variant="adaptive" className="fixed z-[1]" />
+   618→
+   619→      <div className="max-w-6xl mx-auto px-6 md:px-12 relative z-10">
+   620→        {/* Hero */}
+   621→        <div className="bg-white dark:bg-[#09090b] border-4 border-black dark:border-white shadow-[12px_12px_0_#000] dark:shadow-[12px_12px_0_#8a2be2] p-6 md:p-10 mb-6 relative no-color-transition">
+   622→          <StarGraphic className="absolute top-4 right-4 w-12 h-12 text-[#8a2be2] animate-spin-slow" />
+   623→          <h1
+   624→            className="font-bebas text-5xl md:text-[100px] leading-none uppercase text-black dark:text-white"
+   625→            style={{ textShadow: "6px 6px 0px #8a2be2" }}
+   626→          >
+   627→            <span className="text-[#8a2be2] ud-glitch-hover cursor-pointer" data-text="PORTFOLIO">
+   628→              PORTFOLIO
+   629→            </span>
+   630→          </h1>
+   631→          <p className="font-mono-ud text-base md:text-lg font-bold mt-4 max-w-2xl bg-[#8a2be2] text-white border-4 border-black p-3 inline-block shadow-[4px_4px_0_#000]">
+   632→            Bukan cuma player. Kami juga builder. Pilih entitas untuk lihat profil lengkapnya.
+   633→          </p>
+   634→          <div className="mt-4 font-mono-ud text-sm text-black/60 dark:text-white/60">
+   635→            ▸ {members.length} ENTITIES · CV + PROJECTS + ACHIEVEMENTS
+   636→          </div>
+   637→        </div>
+   638→
+   639→        {/* Member selector */}
+   640→        <div className="bg-white dark:bg-[#09090b] border-4 border-black dark:border-white shadow-[8px_8px_0_#000] dark:shadow-[8px_8px_0_#8a2be2] p-4 mb-6">
+   641→          <div className="flex items-center justify-between mb-3">
+   642→            <span className="font-mono-ud text-sm font-black tracking-[0.2em] uppercase text-black/50 dark:text-white/50">
+   643→              ▸ SELECT ENTITY
+   644→            </span>
+   645→            <div className="flex items-center gap-1">
+   646→              <button
+   647→                onClick={goPrev}
+   648→                className="w-8 h-8 flex items-center justify-center bg-black dark:bg-white text-white dark:text-black border-2 border-black dark:border-white hover:bg-[#8a2be2] hover:text-white transition-colors no-color-transition"
+   649→                aria-label="Previous member"
+   650→              >
+   651→                <ChevronLeft className="w-4 h-4" />
+   652→              </button>
+   653→              <button
+   654→                onClick={goNext}
+   655→                className="w-8 h-8 flex items-center justify-center bg-black dark:bg-white text-white dark:text-black border-2 border-black dark:border-white hover:bg-[#8a2be2] hover:text-white transition-colors no-color-transition"
+   656→                aria-label="Next member"
+   657→              >
+   658→                <ChevronRight className="w-4 h-4" />
+   659→              </button>
+   660→            </div>
+   661→          </div>
+   662→          <MemberSelector members={members} selectedId={selectedId} onSelect={setSelectedId} />
+   663→        </div>
+   664→
+   665→        {/* Member portfolio */}
+   666→        <MemberPortfolio member={selected} />
+   667→      </div>
+   668→    </div>
+   669→  );
+   670→}
+   671→

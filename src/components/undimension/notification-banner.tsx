@@ -78,7 +78,7 @@ export function NotificationBanner() {
   if (notifications.length === 0) return null;
 
   return (
-    <div className="fixed top-14 md:top-16 left-0 right-0 z-[45] flex flex-col items-center gap-1 px-2 pointer-events-none">
+    <div className="fixed top-20 md:top-28 left-0 right-0 z-[55] flex flex-col items-center gap-1 px-2 pointer-events-none">
       {notifications.map((n) => (
         <div
           key={n.id}

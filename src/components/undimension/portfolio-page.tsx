@@ -601,9 +601,8 @@ export function PortfolioPage() {
   // Fetch members from API (DB-backed) with static fallback
   const { data: membersData } = useFetch<{ members: Member[] }>("/api/members");
   const { godMode } = useChaos();
-  const HIDDEN_IDS = new Set(MEMBERS.filter((m) => m.hidden).map((m) => m.id));
   const allMembers = membersData?.members ?? MEMBERS;
-  const members = allMembers.filter((m) => !HIDDEN_IDS.has(m.id) || godMode);
+  const members = allMembers.filter((m) => !m.hidden || godMode);
   const [selectedId, setSelectedId] = useState("aldi");
   useScrollReveal();
 

@@ -16,6 +16,7 @@ function mapMember(m: {
   statsJson: string; socialsJson: string;
   taglineCareer: string; location: string; availability: string;
   educationJson: string; workHistoryJson: string; skillsJson: string;
+  hidden?: boolean;
 }) {
   return {
     id: m.slug,
@@ -27,6 +28,7 @@ function mapMember(m: {
     highlight: m.highlight,
     bio: m.bio,
     bioPortfolio: m.bioPortfolio || "",
+    hidden: m.hidden || false,
     tagline: m.tagline || "",
     quote: m.quote || "",
     funFacts: safeParse<string[]>(m.funFactsJson, []),

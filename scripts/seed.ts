@@ -34,6 +34,7 @@ async function main() {
       educationJson: JSON.stringify(m.education || []),
       workHistoryJson: JSON.stringify(m.workHistory || []),
       skillsJson: JSON.stringify(m.skills || []),
+      hidden: m.hidden || false,
       order: i,
     };
     await db.member.upsert({

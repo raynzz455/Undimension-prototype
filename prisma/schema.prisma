@@ -38,6 +38,7 @@ model Member {
   educationJson   String   @default("[]")
   workHistoryJson String   @default("[]")
   skillsJson      String   @default("[]")
+  hidden          Boolean  @default(false) // hidden members only show in chaos mode
   order           Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

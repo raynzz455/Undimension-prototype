@@ -158,7 +158,18 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ slug: strin
       });
     } catch (e) {
       console.warn(`[PUT /api/members/${slug}] bioPortfolio update skipped (column may not exist):`, e instanceof Error ? e.message : e);
-      // Continue — the main fields are already saved
+    }
+  }
+
+  // ── Try to update hidden flag separately (won't break the main update) ──
+  if (body.hidden !== undefined) {
+    try {
+      updated = await db.member.update({
+        where: { slug },
+        data: { hidden: Boolean(body.hidden) },
+      });
+    } catch (e) {
+      console.warn(`[PUT /api/members/${slug}] hidden update skipped (column may not exist):`, e instanceof Error ? e.message : e);
     }
   }
 

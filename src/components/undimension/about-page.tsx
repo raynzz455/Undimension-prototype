@@ -118,31 +118,19 @@ const MemberCard = memo(function MemberCard({ m, i, onOpenMember }: { m: Member;
         </h2>
       </div>
 
-      {/* Grid layout: mobile = name→image→info (top-down), desktop = image | name+info (side) */}
       <div
         className={cn(
-          "relative z-10 grid grid-cols-1 md:grid-cols-[58%_42%] gap-6 md:gap-0",
+          "relative z-10 flex flex-col gap-12 md:gap-0 items-center",
+          isEven ? "md:flex-row" : "md:flex-row-reverse",
         )}
       >
-        {/* ── Full Name Barcode Tag ──
-            Mobile: row 1 (top, above photo).
-            Desktop: col 2 row 1 (right, top — aligned with photo top). */}
-        <div className="md:col-start-2 md:row-start-1 bg-black text-white dark:bg-white dark:text-black border-4 border-black dark:border-white p-4 md:p-6 shadow-[12px_12px_0_#000] dark:shadow-[12px_12px_0_#fff] -rotate-1 no-color-transition">
-          <h3 className="font-bebas text-5xl md:text-7xl leading-[0.8] mb-2">
-            {m.name}
-          </h3>
-          <div className="w-full h-3 ud-barcode mt-3" />
-        </div>
-
-        {/* ── Image Container ──
-            Mobile: row 2 (below name).
-            Desktop: col 1 row 1, spanning 2 rows (left, full height). */}
+        {/* Image Container */}
         <div
           className={cn(
-            "md:col-start-1 md:row-start-1 md:row-span-2 w-full relative transition-transform duration-300 ease-out z-30 group-hover:rotate-0 px-2 md:px-6 pt-8 md:pt-14 pb-6 md:pb-10",
+            "w-full md:w-[60%] lg:w-[62%] relative transition-transform duration-300 ease-out z-30 group-hover:rotate-0 px-2 md:px-6 pt-16 md:pt-14 pb-10",
             isEven
-              ? "rotate-2 md:-translate-x-4 md:-translate-y-8"
-              : "-rotate-2 md:translate-x-4 md:-translate-y-8",
+              ? "rotate-6 md:-translate-x-4 md:-translate-y-8"
+              : "-rotate-6 md:translate-x-4 md:-translate-y-8",
           )}
         >
           <div className="border-8 border-black dark:border-white bg-black p-3 shadow-[16px_16px_0_#000] dark:shadow-[16px_16px_0_#fff] relative">
@@ -165,39 +153,50 @@ const MemberCard = memo(function MemberCard({ m, i, onOpenMember }: { m: Member;
               )}
               <div className="absolute inset-0 ud-scanlines pointer-events-none" />
             </div>
-            {/* Tape Sticker — smaller on mobile to avoid clipping */}
-            <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-[#ffea00] border-4 border-black px-4 py-1.5 md:px-10 md:py-3 font-mono-ud font-black text-black text-lg md:text-4xl shadow-[6px_6px_0_#000] -rotate-3 z-40 whitespace-nowrap">
+            {/* Tape Sticker */}
+            <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#ffea00] border-4 border-black px-6 py-2 md:px-10 md:py-3 font-mono-ud font-black text-black text-xl md:text-4xl shadow-[6px_6px_0_#000] -rotate-3 z-40 whitespace-nowrap">
               &ldquo;{m.nick.toUpperCase()}&rdquo;
             </div>
-            <div className="absolute -bottom-4 right-0 bg-white border-4 border-black px-3 py-1.5 font-bebas text-2xl md:text-3xl shadow-[4px_4px_0_#000] rotate-6 z-40">
+            <div className="absolute -bottom-6 right-0 bg-white border-4 border-black px-4 py-2 font-bebas text-3xl shadow-[4px_4px_0_#000] rotate-6 z-40">
               ID_00{i + 1}
             </div>
           </div>
         </div>
 
-        {/* ── Role + Bio + Stats + Buttons ──
-            Mobile: row 3 (below image).
-            Desktop: col 2 row 2 (right, below name). */}
-        <div className="md:col-start-2 md:row-start-2 flex flex-col z-20 md:pl-8 md:pr-4">
+        {/* Info Container */}
+        <div
+          className={cn(
+            "w-full md:w-[40%] lg:w-[38%] flex flex-col z-20",
+            isEven ? "md:pl-12" : "md:pr-12",
+          )}
+        >
+          {/* Full Name Barcode Tag — pushed up slightly for more gap with bio */}
+          <div className="bg-black text-white dark:bg-white dark:text-black border-4 border-black dark:border-white p-6 shadow-[12px_12px_0_#000] dark:shadow-[12px_12px_0_#fff] -rotate-1 no-color-transition md:-mt-6 mb-16">
+            <h3 className="font-bebas text-6xl md:text-8xl leading-[0.8] mb-2">
+              {m.name}
+            </h3>
+            <div className="w-full h-4 ud-barcode mt-4" />
+          </div>
+
           {/* Role & Bio Sheet */}
-          <div className="bg-white dark:bg-black border-4 border-black dark:border-white p-6 md:p-8 shadow-[12px_12px_0_#000] dark:shadow-[12px_12px_0_#fff] rotate-1 md:rotate-2 relative no-color-transition">
+          <div className="bg-white dark:bg-black border-4 border-black dark:border-white p-8 shadow-[12px_12px_0_#000] dark:shadow-[12px_12px_0_#fff] rotate-2 relative no-color-transition">
             <div className="absolute -top-5 -right-5 w-10 h-10 rounded-full bg-red-600 border-4 border-black shadow-[4px_4px_0_#000]" />
             <div className="absolute top-4 left-4 w-4 h-4 rounded-full bg-black dark:bg-white" />
 
-            <h4 className="font-mono-ud font-black text-2xl md:text-3xl mb-4 md:mb-6 bg-black text-white dark:bg-white dark:text-black inline-block px-3 py-1.5 md:px-4 md:py-2">
+            <h4 className="font-mono-ud font-black text-3xl mb-6 bg-black text-white dark:bg-white dark:text-black inline-block px-4 py-2">
               {m.role}
             </h4>
-            <p className="font-outfit font-bold text-base md:text-xl text-black dark:text-white leading-relaxed">
+            <p className="font-outfit font-bold text-xl text-black dark:text-white leading-relaxed">
               <BioText highlightClass={m.highlight}>{m.bio}</BioText>
             </p>
 
             {/* D&D Stats Blocks */}
-            <div className="mt-6 md:mt-8 flex flex-wrap gap-2 border-t-8 border-black dark:border-white pt-4 md:pt-6">
+            <div className="mt-8 flex flex-wrap gap-2 border-t-8 border-black dark:border-white pt-6">
               {m.stats.map((stat, idx) => (
                 <span
                   key={idx}
                   className={cn(
-                    "border-4 border-black dark:border-white px-2 md:px-3 py-1 font-bebas text-lg md:text-2xl",
+                    "border-4 border-black dark:border-white px-3 py-1 font-bebas text-xl md:text-2xl",
                     idx % 2 === 1
                       ? "bg-black text-white dark:bg-white dark:text-black"
                       : "bg-white text-black dark:bg-black dark:text-white",
@@ -210,26 +209,26 @@ const MemberCard = memo(function MemberCard({ m, i, onOpenMember }: { m: Member;
           </div>
 
           {/* View Profile Button */}
-          <div className="mt-6 md:mt-10 -rotate-1">
+          <div className="mt-10 -rotate-1">
             <button
               onClick={() => onOpenMember(m)}
               className={cn(
-                "w-full md:w-auto bg-black text-white dark:bg-white dark:text-black border-4 border-black dark:border-white py-3 md:py-4 px-6 md:px-8 font-bebas text-xl md:text-3xl shadow-[8px_8px_0_#000] dark:shadow-[8px_8px_0_#fff] hover:translate-y-1 hover:translate-x-1 hover:shadow-[0_0_0_#000] transition-all no-color-transition flex items-center justify-center gap-3",
+                "w-full md:w-auto bg-black text-white dark:bg-white dark:text-black border-4 border-black dark:border-white py-4 px-8 font-bebas text-2xl md:text-3xl shadow-[8px_8px_0_#000] dark:shadow-[8px_8px_0_#fff] hover:translate-y-1 hover:translate-x-1 hover:shadow-[0_0_0_#000] transition-all no-color-transition flex items-center justify-center gap-3",
               )}
             >
-              <UserRound className="w-5 h-5 md:w-6 md:h-6" />
+              <UserRound className="w-6 h-6" />
               VIEW FULL DOSSIER
               <span className="font-mono-ud text-sm opacity-60">[+]</span>
             </button>
           </div>
 
           {/* Social Buttons */}
-          <div className="mt-4 md:mt-6 flex gap-3 md:gap-6 -rotate-1">
+          <div className="mt-6 flex gap-4 md:gap-6 -rotate-1">
             {m.socials.map((social) => (
               <a
                 href={social.href}
                 key={social.label}
-                className="flex-1 bg-black text-white dark:bg-white dark:text-black border-4 border-black dark:border-white py-3 md:py-4 text-center font-bebas text-xl md:text-3xl shadow-[8px_8px_0_#000] dark:shadow-[8px_8px_0_#fff] hover:translate-y-2 hover:translate-x-2 hover:shadow-[0_0_0_#000] transition-all no-color-transition"
+                className="flex-1 bg-black text-white dark:bg-white dark:text-black border-4 border-black dark:border-white py-4 text-center font-bebas text-2xl md:text-3xl shadow-[8px_8px_0_#000] dark:shadow-[8px_8px_0_#fff] hover:translate-y-2 hover:translate-x-2 hover:shadow-[0_0_0_#000] transition-all no-color-transition"
               >
                 {social.label}
               </a>

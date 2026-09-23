@@ -2308,3 +2308,60 @@ Context: Previous discussion about reducing frequent 503 errors on Supabase free
 2. **Verify after update**: trigger `Database Setup` workflow manually → check it succeeds. Redeploy Vercel → check 503 frequency drops.
 3. **Optional schema hardening**: add `directUrl = env("DIRECT_URL")` to schema + set `DIRECT_URL` secret in Vercel + GitHub = more explicit separation. Not urgent since we only use `db:push`.
 4. **Monitor 503 frequency**: after the pooler URL is live, observe whether the `ud-notify-error` popup frequency drops. If still frequent, investigate if PgBouncer itself is hitting the free-tier pool limit (rare).
+
+---
+Task ID: 40
+Agent: main (Z.ai Code)
+Task: User wants to remove the `db-migrate.yml` GitHub Actions workflow because they prefer to run SQL files directly in the Supabase SQL editor.
+
+## Section 1: Action Taken
+
+Deleted `/home/z/my-project/.github/workflows/db-migrate.yml`.
+
+This workflow was previously responsible for:
+- Pushing Prisma schema to Supabase on `prisma/schema.prisma` changes
+- Seeding initial data on `scripts/seed*.ts` changes
+- Manual trigger via `workflow_dispatch`
+
+## Section 2: Why This Is Fine
+
+The user has 10 idempotent SQL migration files in `/home/z/my-project/prisma/migrations/` that can be copy-pasted directly into the Supabase SQL editor:
+
+| File | Purpose |
+|---|---|
+| `0000_complete_schema.sql` | Full schema (creates all tables) |
+| `0001_init.sql` | Initial schema |
+| `0002_add_member_fields.sql` | Adds extra member fields |
+| `0003_add_quotes.sql` | Quotes table |
+| `0004_add_profile_history.sql` | Profile history table |
+| `0005_add_game_players.sql` | Game players table |
+| `0006_add_bio_portfolio.sql` | Bio portfolio field |
+| `0007_add_hidden_column.sql` | Adds `hidden` boolean to Member |
+| `0008_seed_all_data.sql` | Seeds all initial data (idempotent via `ON CONFLICT`) |
+| `0009_seed_nayla_only.sql` | Seeds hidden member Nayla |
+
+These can be run in numerical order in Supabase Dashboard → SQL Editor. Most are idempotent (`ON CONFLICT` clauses), so re-running is safe.
+
+## Section 3: What Was NOT Removed
+
+- `db:push`, `db:generate`, `db:migrate`, `db:migrate:dev`, `db:reset` npm scripts — kept for local development. User can still run `bun run db:push` from CLI if they want, but they prefer Supabase SQL editor for production.
+- `scripts/seed.ts` + `scripts/seed-news.ts` — kept (useful for local seed via `bun run seed`).
+- Other workflows:
+  - `convert-webp-supabase.yml` — kept (WebP image conversion)
+  - `supabase-keepalive.yml` — kept (prevents Supabase free-tier auto-pause)
+  - `webp-guardian.yml` — kept (validates WebP images in repo)
+
+## Section 4: Implications for DATABASE_URL Setup
+
+Since `db-migrate.yml` is deleted:
+- The previous Task 39 recommendation about setting `DATABASE_URL` GitHub secret to the **direct connection URL (port 5432)** is **no longer needed** for migrations.
+- The user only needs to set `DATABASE_URL` in **Vercel** (Transaction Pooler, port 6543) for app runtime.
+- The `DATABASE_URL` GitHub secret can be left unset or removed — it's no longer referenced by any workflow.
+
+This simplifies the deployment setup. The user manages DB schema/seed via the Supabase SQL editor (manual but more control), and Vercel handles the app runtime with the pooler URL.
+
+## Section 5: Next-phase Recommendations
+
+1. **User action**: optionally remove the `DATABASE_URL` GitHub secret (no longer used). Or leave it set — it's harmless if unused.
+2. **Keep migration files up-to-date**: when adding new schema changes, write a new `prisma/migrations/00XX_*.sql` file (idempotent, with `ON CONFLICT` clauses) so the user can paste it into Supabase SQL editor. Don't rely on `bun run db:push` from CI.
+3. **Optional**: add a `README.md` note in `prisma/migrations/` explaining the recommended run order for fresh-DB setup.

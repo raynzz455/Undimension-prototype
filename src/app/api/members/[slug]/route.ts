@@ -122,8 +122,11 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ slug: strin
   }
 
   // ── Build update data ──
+  // NOTE: bioPortfolio is EXCLUDED from stringFields + handled separately
+  // below. This prevents the ENTIRE update from failing if the bioPortfolio
+  // column doesn't exist in the DB (migration 0006 not run yet).
   const data: Record<string, unknown> = {};
-  const stringFields = ["name", "nick", "role", "img", "color", "highlight", "bio", "bioPortfolio", "tagline", "quote", "element", "joinYear", "taglineCareer", "location", "availability"];
+  const stringFields = ["name", "nick", "role", "img", "color", "highlight", "bio", "tagline", "quote", "element", "joinYear", "taglineCareer", "location", "availability"];
   for (const f of stringFields) {
     if (body[f] !== undefined) data[f] = String(body[f]).trim().slice(0, 2000);
   }
@@ -134,13 +137,29 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ slug: strin
   if (body.education !== undefined) data.educationJson = JSON.stringify(body.education);
   if (body.skills !== undefined) data.skillsJson = JSON.stringify(body.skills);
 
-  // ── Update member ──
+  // ── Update member (without bioPortfolio — guaranteed to work) ──
+  let updated: any;
   try {
-    const updated = await db.member.update({ where: { slug }, data });
-    return NextResponse.json({ member: mapMember(updated) });
+    updated = await db.member.update({ where: { slug }, data });
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : String(e);
     console.error(`[PUT /api/members/${slug}] Update failed:`, errMsg);
     return NextResponse.json({ error: "DB update failed", detail: errMsg, step: "dbUpdate", fieldsAttempted: Object.keys(data) }, { status: 500 });
   }
-}
+
+  // ── Try to update bioPortfolio separately (won't break the main update) ──
+  // If the column doesn't exist (migration 0006 not run), this silently
+  // fails + the rest of the member data is already saved.
+  if (body.bioPortfolio !== undefined) {
+    try {
+      updated = await db.member.update({
+        where: { slug },
+        data: { bioPortfolio: String(body.bioPortfolio).trim().slice(0, 2000) },
+      });
+    } catch (e) {
+      console.warn(`[PUT /api/members/${slug}] bioPortfolio update skipped (column may not exist):`, e instanceof Error ? e.message : e);
+      // Continue — the main fields are already saved
+    }
+  }
+
+  return NextResponse.json({ member: mapMember(updated) });

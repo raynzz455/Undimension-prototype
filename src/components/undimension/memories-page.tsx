@@ -1,16 +1,19 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { StarField } from "./star-field";
 import { StarGraphic } from "./primitives";
-import { PhotoLightbox } from "./photo-lightbox";
 import { type GalleryPhoto } from "@/lib/undimension/data";
 import { useScrollReveal } from "@/hooks/use-scroll-reveal";
 import { useSfx } from "@/hooks/use-sfx";
 import { useFetch } from "@/hooks/use-fetch";
 import { cn } from "@/lib/utils";
 import { UnavailablePhoto } from "./unavailable-photo";
+
+// Lazy-load PhotoLightbox (framer-motion heavy) — only needed when user clicks a photo.
+const PhotoLightbox = dynamic(() => import("./photo-lightbox").then(m => m.PhotoLightbox), { ssr: false });
 import {
   Maximize2, RefreshCw, ImageOff, Dices,
   ChevronLeft, ChevronRight, Play, Pause,

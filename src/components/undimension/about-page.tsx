@@ -1,20 +1,10 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, memo } from "react";
+import dynamic from "next/dynamic";
 import { StarField } from "./star-field";
 import { StarGraphic, Marquee, BioText } from "./primitives";
-import { MemberDetailModal } from "./member-detail-modal";
 import { UnavailablePhoto } from "./unavailable-photo";
-import { GuestbookSection } from "./guestbook-section";
-import { TimelineSection } from "./timeline-section";
-import { QuoteWidget } from "./quote-widget";
-import { StatsRadarSection } from "./stats-radar-section";
-import { ManifestoSection } from "./manifesto-section";
-import { CompatibilityMatrix } from "./compatibility-matrix";
-import { MissionControl } from "./mission-control";
-import { CosmicStarMap } from "./cosmic-star-map";
-import { ChaosDice } from "./chaos-dice";
-import { NewsPortal } from "./news-portal";
 import { MEMBERS, HARAPAN, type Member } from "@/lib/undimension/data";
 import { useChaos } from "./chaos-provider";
 import { useFetch } from "@/hooks/use-fetch";
@@ -23,6 +13,21 @@ import { useSfx } from "@/hooks/use-sfx";
 import { useHashMember } from "@/hooks/use-hash-member";
 import { UserRound, Shuffle } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+// Lazy-load below-the-fold sections — they're NOT in the initial JS
+// bundle. They load on-demand when the browser is near rendering them.
+// This significantly reduces initial load time + improves LCP/INP.
+const MemberDetailModal = dynamic(() => import("./member-detail-modal").then(m => m.MemberDetailModal), { ssr: false });
+const GuestbookSection = dynamic(() => import("./guestbook-section").then(m => m.GuestbookSection), { ssr: false });
+const TimelineSection = dynamic(() => import("./timeline-section").then(m => m.TimelineSection), { ssr: false });
+const QuoteWidget = dynamic(() => import("./quote-widget").then(m => m.QuoteWidget), { ssr: false });
+const StatsRadarSection = dynamic(() => import("./stats-radar-section").then(m => m.StatsRadarSection), { ssr: false });
+const ManifestoSection = dynamic(() => import("./manifesto-section").then(m => m.ManifestoSection), { ssr: false });
+const CompatibilityMatrix = dynamic(() => import("./compatibility-matrix").then(m => m.CompatibilityMatrix), { ssr: false });
+const MissionControl = dynamic(() => import("./mission-control").then(m => m.MissionControl), { ssr: false });
+const CosmicStarMap = dynamic(() => import("./cosmic-star-map").then(m => m.CosmicStarMap), { ssr: false });
+const ChaosDice = dynamic(() => import("./chaos-dice").then(m => m.ChaosDice), { ssr: false });
+const NewsPortal = dynamic(() => import("./news-portal").then(m => m.NewsPortal), { ssr: false });
 
 function HeroSection() {
   return (
@@ -236,7 +241,7 @@ function MemberCard({ m, i, onOpen }: { m: Member; i: number; onOpen: () => void
   );
 }
 
-function TheCollective({ members, onOpenMember, lastOpenedIdRef }: { members: Member[]; onOpenMember: (m: Member) => void; lastOpenedIdRef: React.RefObject<string | null> }) {
+const TheCollective = memo(function TheCollective({ members, onOpenMember, lastOpenedIdRef }: { members: Member[]; onOpenMember: (m: Member) => void; lastOpenedIdRef: React.RefObject<string | null> }) {
   const randomMember = () => {
     const lastId = lastOpenedIdRef.current;
     const pool = members.filter((m) => m.id !== lastId);
@@ -280,7 +285,7 @@ function TheCollective({ members, onOpenMember, lastOpenedIdRef }: { members: Me
       </div>
     </div>
   );
-}
+});
 
 function HarapanCardItem({ card }: { card: (typeof HARAPAN)[number] }) {
   return (
@@ -421,14 +426,14 @@ export function AboutPage() {
       <HeroSection />
       <MarqueeBar />
       <TheCollective members={members} onOpenMember={openMember} lastOpenedIdRef={lastOpenedIdRef} />
-      <StatsRadarSection />
-      <TimelineSection />
-      <CompatibilityMatrix />
+      <div className="ud-cv-auto"><StatsRadarSection /></div>
+      <div className="ud-cv-auto"><TimelineSection /></div>
+      <div className="ud-cv-auto"><CompatibilityMatrix /></div>
       <HarapanSection />
-      <ManifestoSection />
-      <CosmicStarMap />
+      <div className="ud-cv-auto"><ManifestoSection /></div>
+      <div className="ud-cv-auto"><CosmicStarMap /></div>
       {/* Two-up: QuoteWidget (always dark) + ChaosDice (always dark). */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 border-t-8 border-black dark:border-white">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 border-t-8 border-black dark:border-white ud-cv-auto">
         <div className="border-b-4 lg:border-b-0 lg:border-r-4 border-black dark:border-white">
           <QuoteWidget />
         </div>
@@ -436,9 +441,9 @@ export function AboutPage() {
           <ChaosDice />
         </div>
       </div>
-      <MissionControl />
-      <NewsPortal />
-      <GuestbookSection />
+      <div className="ud-cv-auto"><MissionControl /></div>
+      <div className="ud-cv-auto"><NewsPortal /></div>
+      <div className="ud-cv-auto"><GuestbookSection /></div>
       <MemberDetailModal member={selected} onClose={closeModal} />
     </div>
   );

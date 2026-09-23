@@ -17,18 +17,27 @@ import { useFetch } from "@/hooks/use-fetch";
 import { cn } from "@/lib/utils";
 import { Radar as RadarIcon, Shuffle, Eye, EyeOff } from "lucide-react";
 
-// Stats are D&D scores (3-20 range) or "MAX"/"???"/anomaly. Normalize to 0-100 for chart.
-// D&D scale: 3-20, so multiply by 5 (3→15, 20→100)
-// Anomaly values (e.g. 9999) are capped at 100 for the chart, but the raw
-// value is shown in the leaderboard so the user sees the actual number.
+// Stats normalization: convert any stat value to 0-100 for the radar chart.
+// Three tiers based on the value range:
+//   1. D&D range (1-20): multiply by 5 → 5-100 (standard D&D scale)
+//   2. Normal range (21-100): use directly → 21-100 (already on 0-100 scale)
+//   3. Anomaly (>100, e.g. 99999): cap at 100 → shows as maxed on THAT stat only
+//
+// This prevents the bug where a value like 67 gets multiplied by 5 (=335)
+// and capped at 100, making ALL stats look maxed. Instead:
+//   STR=99999 → 100 (anomaly spike)
+//   DEX=67    → 67  (moderate)
+//   CON=67    → 67  (moderate)
+// The chart shows a SPIKE on STR, not a full circle.
 function statToNum(value: string): number {
   if (value === "MAX") return 100;
   if (value === "???" || value === "??") return 50;
   const n = parseInt(value, 10);
   if (Number.isNaN(n)) return 50;
-  // D&D stats are 3-20, scale to 0-100
-  // Anomaly: if n > 20, it's an anomaly (e.g. 9999). Cap at 100.
-  return Math.min(100, Math.max(0, n * 5));
+  if (n <= 0) return 0;
+  if (n <= 20) return n * 5;        // D&D scale: 1→5, 10→50, 20→100
+  if (n <= 100) return n;           // Normal scale: 67→67, 80→80
+  return 100;                        // Anomaly: 9999→100 (capped, spike on that stat)
 }
 
 // Build radar data from the given members (not hardcoded MEMBERS)

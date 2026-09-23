@@ -214,10 +214,7 @@ export function GamesPage() {
     // white in BOTH themes — `text-black dark:text-white` would render black
     // text on dark bg in light mode = unreadable. Hardcode to `text-white`.
     <div className="page-enter flex flex-col bg-[#09090b] text-white relative">
-      {/* Fixed background StarField removed — was overlapping with per-section
-          StarFields (each GameSectionView already has its own at z-[2] over
-          the background image). The fixed one at z-[1] was hidden behind the
-          background images but still rendered, causing visual clutter. */}
+      <StarField variant="dark" className="fixed z-[1]" sparkles={false} />
       {games.map((game, i) => (
         <div key={game.id}>
           <GameSectionView game={game} />

@@ -16,7 +16,7 @@ export function StarGraphic({ className }: { className?: string }) {
 
 /**
  * BioText — renders text with simple markdown:
- *   **bold** → <strong>bold</strong>
+ *   **bold** → <strong>bold</strong> (with optional highlight color class)
  *   *italic* → <em>italic</em>
  * Plain text passes through unchanged.
  *
@@ -24,16 +24,19 @@ export function StarGraphic({ className }: { className?: string }) {
  * block elements without creating nested <p> tags (invalid HTML).
  * For standalone block usage, wrap in a <p> or <div>.
  *
- * Usage: <p><BioText>{member.bio}</BioText></p>
+ * The `highlightClass` prop (e.g. "text-[#ff4d4d]") is applied to
+ * <strong> elements so **bold** text gets the member's brand color.
+ *
+ * Usage: <p><BioText highlightClass={m.highlight}>{member.bio}</BioText></p>
  */
-export function BioText({ children, className }: { children: string; className?: string }) {
+export function BioText({ children, className, highlightClass }: { children: string; className?: string; highlightClass?: string }) {
   if (!children) return null;
   const parts = children.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
   return (
     <span className={className}>
       {parts.map((part, i) => {
         if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
-          return <strong key={i} className="font-bold">{part.slice(2, -2)}</strong>;
+          return <strong key={i} className={cn("font-bold", highlightClass)}>{part.slice(2, -2)}</strong>;
         }
         if (part.startsWith("*") && part.endsWith("*") && part.length > 2 && !part.startsWith("**")) {
           return <em key={i}>{part.slice(1, -1)}</em>;

@@ -175,7 +175,7 @@ export function MemberDetailModal({
 
               {/* Bio */}
               <p className="font-outfit text-base md:text-lg leading-relaxed font-medium">
-                <BioText>{member.bio}</BioText>
+                <BioText highlightClass={member.highlight}>{member.bio}</BioText>
               </p>
 
               {/* Quote */}

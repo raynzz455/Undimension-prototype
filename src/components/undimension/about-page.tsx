@@ -183,11 +183,7 @@ function MemberCard({ m, i, onOpen }: { m: Member; i: number; onOpen: () => void
               {m.role}
             </h4>
             <p className="font-outfit font-bold text-xl text-black dark:text-white leading-relaxed">
-              <BioText>{m.bio}</BioText>{" "}
-              <span className={m.highlight}>
-                Ini bukan sekadar julukan, ini adalah cara ia bertahan hidup di
-                kerasnya realita virtual dan nyata.
-              </span>
+              <BioText highlightClass={m.highlight}>{m.bio}</BioText>
             </p>
 
             {/* D&D Stats Blocks */}

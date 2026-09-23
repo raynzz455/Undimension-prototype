@@ -163,3 +163,4 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ slug: strin
   }
 
   return NextResponse.json({ member: mapMember(updated) });
+}

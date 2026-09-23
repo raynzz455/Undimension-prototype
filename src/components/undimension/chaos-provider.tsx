@@ -32,6 +32,7 @@ const GOD_MODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 type ChaosContextValue = {
   chaos: boolean;
   godMode: boolean;
+  naylaRevealed: boolean;
   toggle: () => void;
   reroll: () => void;
   unlockGodMode: () => void;
@@ -40,6 +41,7 @@ type ChaosContextValue = {
 const ChaosContext = createContext<ChaosContextValue>({
   chaos: false,
   godMode: false,
+  naylaRevealed: false,
   toggle: () => {},
   reroll: () => {},
   unlockGodMode: () => {},
@@ -73,6 +75,12 @@ export function ChaosProvider({ children }: { children: ReactNode }) {
   const [chaos, setChaos] = useState(false);
   const [godMode, setGodMode] = useState(false);
   const [palette, setPalette] = useState<Record<string, string>>(DEFAULT_PALETTE);
+  // Session-only flag — NOT persisted to localStorage. Set when the user
+  // clicks the navbar shuffle (chaos toggle) ON. Stays true even when chaos
+  // is toggled OFF. Resets to false on page refresh.
+  // Used to show hidden members (like Nayla) — the condition is ONLY the
+  // shuffle toggle, NOT the Konami code (godMode).
+  const [naylaRevealed, setNaylaRevealed] = useState(false);
 
   // Load persisted state — check if god mode expired
   useEffect(() => {
@@ -176,6 +184,10 @@ export function ChaosProvider({ children }: { children: ReactNode }) {
         setPalette(p);
         localStorage.setItem("ud-chaos-palette", JSON.stringify(p));
       }
+      // When chaos is toggled ON, reveal hidden members (like Nayla).
+      // This flag is session-only (not persisted) — stays true even when
+      // chaos is toggled OFF. Resets on page refresh.
+      if (next) setNaylaRevealed(true);
       return next;
     });
   }, [palette]);
@@ -200,7 +212,7 @@ export function ChaosProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <ChaosContext.Provider value={{ chaos, godMode, toggle, reroll, unlockGodMode }}>
+    <ChaosContext.Provider value={{ chaos, godMode, naylaRevealed, toggle, reroll, unlockGodMode }}>
       {children}
     </ChaosContext.Provider>
   );

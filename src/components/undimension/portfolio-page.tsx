@@ -600,9 +600,11 @@ function MemberPortfolio({ member }: { member: Member }) {
 export function PortfolioPage() {
   // Fetch members from API (DB-backed) with static fallback
   const { data: membersData } = useFetch<{ members: Member[] }>("/api/members");
-  const { godMode } = useChaos();
+  // Hidden members show when the user has toggled navbar shuffle (chaos)
+  // at least once in this session. NOT godMode/Konami.
+  const { naylaRevealed } = useChaos();
   const allMembers = membersData?.members ?? MEMBERS;
-  const members = allMembers.filter((m) => !m.hidden || godMode);
+  const members = allMembers.filter((m) => !m.hidden || naylaRevealed);
   const [selectedId, setSelectedId] = useState("aldi");
   useScrollReveal();
 

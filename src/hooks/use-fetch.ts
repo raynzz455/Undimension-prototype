@@ -71,9 +71,9 @@ export function useFetch<T>(url: string, opts?: FetchOpts): State<T> {
                 setData(dataRef.current); // restore last good data
                 setLoading(false);
               }
-              // Dispatch popup — user has the right to know
+              // Dispatch popup — user has the right to know, in plain language
               window.dispatchEvent(new CustomEvent("ud-notify-error", {
-                detail: { message: "Koneksi dengan sumber data terganggu. Menampilkan data sebelumnya." },
+                detail: { message: "Server sedang sibuk. Data sementara menampilkan hasil terakhir." },
               }));
               return null;
             }
@@ -98,10 +98,9 @@ export function useFetch<T>(url: string, opts?: FetchOpts): State<T> {
             }
             setError(e instanceof Error ? e.message : "fetch failed");
             setLoading(false);
-            // Dispatch global event so the NotificationBanner can show
-            // a warning to the user about the connection issue.
+            // Dispatch popup — plain language, user-friendly
             window.dispatchEvent(new CustomEvent("ud-notify-error", {
-              detail: { message: "Internetmu lambat sehingga koneksi dengan sumber data terganggu." },
+              detail: { message: "Internetmu sedang lambat. Beberapa data mungkin belum terbaru." },
             }));
           }
         });
@@ -119,17 +118,19 @@ export function useFetch<T>(url: string, opts?: FetchOpts): State<T> {
   }, [url, enabled, tick]);
 
   // Refetch on window focus (user returns to the tab)
+  // Uses a random jitter (0-500ms) so multiple useFetch instances
+  // don't all fire at the exact same instant → reduces DB connection
+  // spike when the user returns to the tab (Supabase free tier has
+  // limited connections, simultaneous requests can trigger 503).
   useEffect(() => {
     if (!enabled || !refetchOnFocus) return;
-    const onFocus = () => {
-      // Only refetch if the document was hidden (actually came back from another tab)
-      // This prevents unnecessary fetches on click-within-tab
-      refetch();
+    const jitteredRefetch = () => {
+      const delay = Math.floor(Math.random() * 500);
+      setTimeout(() => refetch(), delay);
     };
+    const onFocus = () => jitteredRefetch();
     const onVisibility = () => {
-      if (document.visibilityState === "visible") {
-        refetch();
-      }
+      if (document.visibilityState === "visible") jitteredRefetch();
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisibility);

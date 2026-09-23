@@ -245,4 +245,28 @@ export const MEMBER_CV: Record<string, MemberCV> = {
       { id: "dd2", title: "K8S AUTOSCALER", description: "Custom autoscaler untuk Kubernetes.", tech: ["Go", "Kubernetes"], category: "TOOL", status: "LIVE", year: "2024", author: "DUDIT", color: "#8a2be2" },
     ],
   },
+  nayla: {
+    taglineCareer: "Phantom Developer & Digital Ghost",
+    location: "Unknown",
+    availability: "GHOST",
+    education: [
+      { school: "Institut Digital Phantom", degree: "S1 Ilmu Gaib Digital", period: "2024-2028", description: "Belajar cara exist tanpa terdeteksi" },
+    ],
+    workHistory: [
+      { company: "Collective UNDIMENSION", role: "Phantom Member", period: "2026-Sekarang", description: "Muncul hanya saat chaos mode aktif. Bekerja di bayang-bayang.", current: true },
+    ],
+    skills: [
+      { name: "Invisibility", level: 99, category: "SOFT" },
+      { name: "JavaScript", level: 75, category: "LANGUAGE" },
+      { name: "Python", level: 70, category: "LANGUAGE" },
+      { name: "React", level: 65, category: "FRAMEWORK" },
+      { name: "Mystery", level: 100, category: "SOFT" },
+    ],
+    achievements: [
+      { title: "Hidden Member Unlocked", year: "2026", description: "Member pertama yang hidden — hanya muncul saat chaos mode" },
+    ],
+    projects: [
+      { id: "ny1", title: "PHANTOM PROTOCOL", description: "Sistem yang membuat member bisa muncul/hilang sesuai kondisi.", tech: ["Next.js", "WebSocket"], category: "TOOL", status: "WIP", year: "2026", author: "NAYE", color: "#ff006e" },
+    ],
+  },
 };

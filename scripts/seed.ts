@@ -13,35 +13,35 @@ async function main() {
 
   for (let i = 0; i < MEMBERS.length; i++) {
     const m = MEMBERS[i];
+    const memberData = {
+      name: m.name,
+      nick: m.nick,
+      role: m.role,
+      img: m.img,
+      color: m.color,
+      highlight: m.highlight,
+      bio: m.bio,
+      tagline: m.tagline || "",
+      quote: m.quote || "",
+      funFactsJson: JSON.stringify(m.funFacts || []),
+      element: m.element || "",
+      joinYear: m.joinYear || "2020",
+      statsJson: JSON.stringify(m.stats),
+      socialsJson: JSON.stringify(m.socials),
+      taglineCareer: m.taglineCareer || "",
+      location: m.location || "",
+      availability: m.availability || "EMPLOYED",
+      educationJson: JSON.stringify(m.education || []),
+      workHistoryJson: JSON.stringify(m.workHistory || []),
+      skillsJson: JSON.stringify(m.skills || []),
+      order: i,
+    };
     await db.member.upsert({
       where: { slug: m.id },
-      update: {
-        name: m.name,
-        nick: m.nick,
-        role: m.role,
-        img: m.img,
-        color: m.color,
-        highlight: m.highlight,
-        bio: m.bio,
-        statsJson: JSON.stringify(m.stats),
-        socialsJson: JSON.stringify(m.socials),
-        order: i,
-      },
-      create: {
-        slug: m.id,
-        name: m.name,
-        nick: m.nick,
-        role: m.role,
-        img: m.img,
-        color: m.color,
-        highlight: m.highlight,
-        bio: m.bio,
-        statsJson: JSON.stringify(m.stats),
-        socialsJson: JSON.stringify(m.socials),
-        order: i,
-      },
+      update: memberData,
+      create: { slug: m.id, ...memberData },
     });
-    console.log(`  ✓ ${m.nick} (${m.role})`);
+    console.log(`  ✓ ${m.nick} (${m.role})${m.hidden ? " [HIDDEN]" : ""}`);
   }
   console.log(`\n✅ Seeded ${MEMBERS.length} members.`);
 

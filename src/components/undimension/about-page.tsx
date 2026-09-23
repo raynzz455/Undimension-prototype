@@ -96,12 +96,12 @@ function MarqueeBar() {
   );
 }
 
-function MemberCard({ m, i, onOpen }: { m: Member; i: number; onOpen: () => void }) {
+const MemberCard = memo(function MemberCard({ m, i, onOpenMember }: { m: Member; i: number; onOpenMember: (m: Member) => void }) {
   const isEven = i % 2 === 0;
   return (
     <div
       className={cn(
-        "relative w-full border-8 border-black dark:border-white p-6 md:p-12 z-10 group ud-cv-auto ud-reveal",
+        "relative w-full border-8 border-black dark:border-white p-6 md:p-12 z-10 group",
         m.color,
       )}
       data-reveal-delay={String((i % 3) * 80)}
@@ -135,7 +135,7 @@ function MemberCard({ m, i, onOpen }: { m: Member; i: number; onOpen: () => void
           )}
         >
           <div className="border-8 border-black dark:border-white bg-black p-3 shadow-[16px_16px_0_#000] dark:shadow-[16px_16px_0_#fff] relative">
-            <div className="relative overflow-hidden group-hover:scale-[1.02] transition-transform duration-300 ease-out cursor-pointer" onClick={onOpen} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}>
+            <div className="relative overflow-hidden group-hover:scale-[1.02] transition-transform duration-300 ease-out cursor-pointer" onClick={() => onOpenMember(m)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onOpenMember(m); }}>
               {m.img ? (
                 <img
                   src={m.img}
@@ -212,7 +212,7 @@ function MemberCard({ m, i, onOpen }: { m: Member; i: number; onOpen: () => void
           {/* View Profile Button */}
           <div className="mt-10 -rotate-1">
             <button
-              onClick={onOpen}
+              onClick={() => onOpenMember(m)}
               className={cn(
                 "w-full md:w-auto bg-black text-white dark:bg-white dark:text-black border-4 border-black dark:border-white py-4 px-8 font-bebas text-2xl md:text-3xl shadow-[8px_8px_0_#000] dark:shadow-[8px_8px_0_#fff] hover:translate-y-1 hover:translate-x-1 hover:shadow-[0_0_0_#000] transition-all no-color-transition flex items-center justify-center gap-3",
               )}
@@ -239,7 +239,7 @@ function MemberCard({ m, i, onOpen }: { m: Member; i: number; onOpen: () => void
       </div>
     </div>
   );
-}
+});
 
 const TheCollective = memo(function TheCollective({ members, onOpenMember, lastOpenedIdRef }: { members: Member[]; onOpenMember: (m: Member) => void; lastOpenedIdRef: React.RefObject<string | null> }) {
   const randomMember = () => {
@@ -279,7 +279,7 @@ const TheCollective = memo(function TheCollective({ members, onOpenMember, lastO
 
         <div className="flex flex-col gap-32 md:gap-48 mt-20">
           {members.map((m, i) => (
-            <MemberCard key={m.id} m={m} i={i} onOpen={() => onOpenMember(m)} />
+            <MemberCard key={m.id} m={m} i={i} onOpenMember={onOpenMember} />
           ))}
         </div>
       </div>

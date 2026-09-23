@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db, isDbConfigured } from "@/lib/db";
+import { db, isDbConfigured, dbRetry } from "@/lib/db";
 import { MEMBERS } from "@/lib/undimension/data";
 
 export const dynamic = "force-dynamic";
@@ -52,7 +52,7 @@ export async function GET() {
     return NextResponse.json({ members: MEMBERS });
   }
   try {
-    const members = await db.member.findMany({ orderBy: { order: "asc" } });
+    const members = await dbRetry(() => db.member.findMany({ orderBy: { order: "asc" } }));
     const data = members.map(mapMember);
     return NextResponse.json({ members: data });
   } catch (e) {

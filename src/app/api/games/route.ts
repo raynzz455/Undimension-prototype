@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, isDbConfigured } from "@/lib/db";
+import { db, isDbConfigured, dbRetry } from "@/lib/db";
 import { requireChaosMode } from "@/lib/chaos-auth";
 import { rateLimit, getClientIP, sanitizeText } from "@/lib/rate-limit";
 import { GAMES } from "@/lib/undimension/data";
@@ -12,15 +12,15 @@ export async function GET() {
     return NextResponse.json({ games: GAMES });
   }
   try {
-    const games = await db.game.findMany({ orderBy: { order: "asc" } });
+    const games = await dbRetry(() => db.game.findMany({ orderBy: { order: "asc" } }));
     if (games.length === 0) return NextResponse.json({ games: GAMES });
     // Expand each game with its moments (for the carousel)
     const expanded = await Promise.all(
       games.map(async (g) => {
-        const moments = await db.gameMoment.findMany({
+        const moments = await dbRetry(() => db.gameMoment.findMany({
           where: { gameId: g.gameId },
           orderBy: { order: "asc" },
-        });
+        }));
         return {
           id: g.gameId,
           sector: g.sector,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, isDbConfigured } from "@/lib/db";
+import { db, isDbConfigured, dbRetry } from "@/lib/db";
 import { RANDOM_QUOTES } from "@/lib/undimension/data";
 import { requireChaosMode } from "@/lib/chaos-auth";
 import { rateLimit, getClientIP } from "@/lib/rate-limit";
@@ -12,7 +12,7 @@ export async function GET() {
     return NextResponse.json({ quotes: staticQuotes, count: staticQuotes.length });
   }
   try {
-    const rows = await db.quote.findMany({ orderBy: { order: "asc" } });
+    const rows = await dbRetry(() => db.quote.findMany({ orderBy: { order: "asc" } }));
     const quotes = rows.map((q) => ({ id: q.id, text: q.text, author: q.author, order: q.order }));
     const merged = quotes.length > 0 ? quotes : RANDOM_QUOTES.map((q, i) => ({ id: `static-${i}`, ...q, order: i }));
     return NextResponse.json({ quotes: merged, count: merged.length });

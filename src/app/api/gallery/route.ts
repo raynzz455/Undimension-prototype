@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, isDbConfigured } from "@/lib/db";
+import { db, isDbConfigured, dbRetry } from "@/lib/db";
 import { GALLERY_PHOTOS } from "@/lib/undimension/data";
 import { requireChaosMode } from "@/lib/chaos-auth";
 
@@ -9,7 +9,7 @@ export async function GET() {
   let dbPhotos: { id: string; img: string; title: string; date: string; rotate: string; author: string }[] = [];
   if (isDbConfigured()) {
     try {
-      const rows = await db.galleryPhoto.findMany({ orderBy: { createdAt: "desc" } });
+      const rows = await dbRetry(() => db.galleryPhoto.findMany({ orderBy: { createdAt: "desc" } }));
       dbPhotos = rows.map((p) => ({ id: p.id, img: p.img, title: p.title, date: p.date, rotate: p.rotate, author: p.author }));
     } catch (e) {
       console.warn("[GET /api/gallery] DB unavailable, returning 503.", e instanceof Error ? e.message : e);

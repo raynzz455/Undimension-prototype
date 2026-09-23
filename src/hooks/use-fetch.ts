@@ -64,13 +64,17 @@ export function useFetch<T>(url: string, opts?: FetchOpts): State<T> {
       fetch(url, { signal: ac.signal, cache: "no-store" })
         .then(async (res) => {
           if (!res.ok) {
-            // On 503 (service unavailable) or other errors: KEEP old data.
-            // Don't throw — just don't update data. The user keeps what they had.
+            // On 503 (service unavailable): KEEP old data + show popup.
+            // The user has the right to know about connection issues.
             if (res.status === 503) {
               if (mountedRef.current && dataRef.current) {
                 setData(dataRef.current); // restore last good data
                 setLoading(false);
               }
+              // Dispatch popup — user has the right to know
+              window.dispatchEvent(new CustomEvent("ud-notify-error", {
+                detail: { message: "Koneksi dengan sumber data terganggu. Menampilkan data sebelumnya." },
+              }));
               return null;
             }
             throw new Error(`HTTP ${res.status}`);

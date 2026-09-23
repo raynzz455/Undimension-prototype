@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, isDbConfigured } from "@/lib/db";
+import { db, isDbConfigured, dbRetry } from "@/lib/db";
 import { PORTFOLIO_PROJECTS } from "@/lib/undimension/data";
 import { requireChaosMode } from "@/lib/chaos-auth";
 import { rateLimit, getClientIP } from "@/lib/rate-limit";
@@ -11,7 +11,7 @@ export async function GET() {
     return NextResponse.json({ projects: PORTFOLIO_PROJECTS, count: PORTFOLIO_PROJECTS.length });
   }
   try {
-    const rows = await db.portfolioProject.findMany({ orderBy: [{ year: "desc" }, { createdAt: "desc" }] });
+    const rows = await dbRetry(() => db.portfolioProject.findMany({ orderBy: [{ year: "desc" }, { createdAt: "desc" }] }));
     const projects = rows.map((p) => ({
       id: p.id, title: p.title, description: p.description,
       tech: JSON.parse(p.techJson) as string[], category: p.category, status: p.status,

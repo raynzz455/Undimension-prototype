@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, isDbConfigured } from "@/lib/db";
+import { db, isDbConfigured, dbRetry } from "@/lib/db";
 import { requireChaosMode } from "@/lib/chaos-auth";
 import { rateLimit, getClientIP } from "@/lib/rate-limit";
 
@@ -10,11 +10,11 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const memberId = searchParams.get("memberId");
-    const rows = await db.achievement.findMany({
+    const rows = await dbRetry(() => db.achievement.findMany({
       where: memberId ? { memberId } : undefined,
       orderBy: [{ year: "desc" }, { createdAt: "desc" }],
       include: { images: true },
-    });
+    }));
     // Return image objects with both id (for delete) and img (URL for display)
     // so the frontend can wire up per-image delete without extra round-trips.
     const achievements = rows.map((a) => ({

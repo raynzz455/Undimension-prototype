@@ -52,6 +52,8 @@ export type Member = {
   skills: Skill[];
   achievements: Achievement[];
   projects: PortfolioProject[];
+  /** Hidden members are only visible in chaos mode, not on public pages. */
+  hidden?: boolean;
 };
 
 export const MEMBERS: Member[] = [
@@ -285,6 +287,40 @@ export const MEMBERS: Member[] = [
       { label: "X_TWITTER", href: "#" },
       { label: "DISCORD", href: "#" },
     ],
+  },
+  {
+    id: "nayla",
+    name: "Nayla",
+    nick: "Naye",
+    role: "THE PHANTOM",
+    img: "",
+    color: "bg-[#ff006e]",
+    highlight: "text-[#ff006e]",
+    bio: "Entitas misterius yang muncul hanya saat chaos mode aktif. Hadir di bayang-bayang, namun selalu ada saat dibutuhkan.",
+    tagline: "Here when chaos calls. Gone when it fades.",
+    quote: "Aku bukan glitch. Aku fitur yang belum kamu temukan.",
+    funFacts: [
+      "Muncul hanya dalam chaos mode",
+      "Identitas sebenarnya tidak ada yang tahu",
+      "Selalu hadir saat konami code diaktifkan",
+      "Lebih mirip hantu daripada member",
+    ],
+    element: "PHANTOM",
+    joinYear: "2026",
+    stats: [
+      { label: "STR", value: "10" },
+      { label: "DEX", value: "20" },
+      { label: "CON", value: "8" },
+      { label: "INT", value: "18" },
+      { label: "WIS", value: "16" },
+      { label: "CHA", value: "20" },
+    ],
+    socials: [
+      { label: "INSTAGRAM", href: "#" },
+      { label: "X_TWITTER", href: "#" },
+      { label: "DISCORD", href: "#" },
+    ],
+    hidden: true,
   },
 ];
 

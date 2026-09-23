@@ -21,7 +21,7 @@ type Tab = "about" | "gallery" | "news" | "guestbook" | "portfolio" | "games" | 
 // Actual member slugs (from data.ts `id` field — used as DB FK).
 // NOTE: the old list used nicks (rembo, eja, byan, acong, tipki) which are NOT
 // the slugs — that was a bug causing FK violations. Fixed to real slugs.
-const MEMBER_SLUGS = ["aldi", "razka", "reza", "abyan", "rasya", "rifqi", "dudit"];
+const MEMBER_SLUGS = ["aldi", "razka", "reza", "abyan", "rasya", "rifqi", "dudit", "nayla"];
 const PORTFOLIO_CATEGORIES = ["WEB", "GAME", "MOBILE", "TOOL", "BOT", "OTHER"];
 const PORTFOLIO_STATUSES = ["LIVE", "WIP", "ARCHIVED"];
 

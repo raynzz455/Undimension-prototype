@@ -45,14 +45,14 @@ export type GameDetail = {
 
 const MEMBER_COLORS: Record<string, string> = {
   aldi: "#ff4d4d", razka: "#00e5ff", reza: "#d4ff00",
-  abyan: "#ff00ff", rasya: "#ff8c00", rifqi: "#00ff00", dudit: "#8a2be2",
+  abyan: "#ff00ff", rasya: "#ff8c00", rifqi: "#00ff00", dudit: "#8a2be2", nayla: "#ff006e",
 };
 
 const MEMBER_IMGS: Record<string, string> = {
   aldi: "", razka: "/members/member-razka.webp",
   reza: "/members/member-reza.webp", abyan: "/members/member-abyan.webp",
   rasya: "/members/member-rasya.webp", rifqi: "",
-  dudit: "",
+  dudit: "", nayla: "",
 };
 
 export const GAME_DETAILS: Record<string, GameDetail> = {

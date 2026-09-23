@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { StarField } from "./star-field";
 import { StarGraphic } from "./primitives";
 import { MEMBERS, type Member, type PortfolioProject } from "@/lib/undimension/data";
+import { useChaos } from "./chaos-provider";
 import { MEMBER_CV } from "@/lib/undimension/cv-data";
 import { useScrollReveal } from "@/hooks/use-scroll-reveal";
 import { useSfx } from "@/hooks/use-sfx";
@@ -332,14 +333,22 @@ function AchievementModal({
 }
 
 function MemberPortfolio({ member }: { member: Member }) {
-  const cv = MEMBER_CV[member.id];
+  const staticCv = MEMBER_CV[member.id];
   const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
   const { play } = useSfx();
 
   // Fetch DB achievements for this member (with images)
   const { data: achievementsData } = useFetch<{ achievements: { id: string; memberId: string; title: string; year: string; description: string; images: { id: string; img: string }[] }[] }>(`/api/achievements?memberId=${member.id}`);
 
-  if (!cv) return null;
+  const workHistory = member.workHistory?.length ? member.workHistory : (staticCv?.workHistory || []);
+  const education = member.education?.length ? member.education : (staticCv?.education || []);
+  const skills = member.skills?.length ? member.skills : (staticCv?.skills || []);
+  const taglineCareer = member.taglineCareer || staticCv?.taglineCareer || "";
+  const location = member.location || staticCv?.location || "";
+  const availability = member.availability || staticCv?.availability || "EMPLOYED";
+  const projects = staticCv?.projects || [];
+
+  if (!staticCv && !member.workHistory && !member.education) return null;
 
   // Merge: DB achievements (with photos) + static CV achievements.
   // DB returns { id, img }[] for images; flatten to URL strings for the
@@ -350,10 +359,10 @@ function MemberPortfolio({ member }: { member: Member }) {
     description: a.description,
     images: a.images.map((img) => img.img),
   }));
-  const allAchievements = [...dbAchievements, ...cv.achievements];
+  const allAchievements = [...dbAchievements, ...(staticCv?.achievements || [])];
 
   const memberColor = member.color.replace("bg-[", "").replace("]", "");
-  const availColor = AVAILABILITY_COLORS[cv.availability] || "#00e5ff";
+  const availColor = AVAILABILITY_COLORS[availability] || "#00e5ff";
 
   return (
     <AnimatePresence mode="wait">
@@ -402,13 +411,13 @@ function MemberPortfolio({ member }: { member: Member }) {
                     className="font-mono-ud text-xs font-black px-2 py-1 border-2 border-black"
                     style={{ backgroundColor: availColor, color: "#000" }}
                   >
-                    ● {cv.availability}
+                    ● {availability}
                   </span>
                 </div>
                 <h2 className="font-bebas text-5xl md:text-7xl leading-none">{member.name}</h2>
-                <p className="font-mono-ud text-base md:text-lg font-bold mt-1">{cv.taglineCareer}</p>
+                <p className="font-mono-ud text-base md:text-lg font-bold mt-1">{taglineCareer}</p>
                 <div className="flex items-center gap-4 mt-3 font-mono-ud text-sm md:text-base">
-                  <span className="flex items-center gap-1"><MapPin className="w-4 h-4" />{cv.location}</span>
+                  <span className="flex items-center gap-1"><MapPin className="w-4 h-4" />{location}</span>
                   <span className="flex items-center gap-1"><Clock className="w-4 h-4" />EST. {member.joinYear}</span>
                 </div>
                 <p className="font-outfit text-base md:text-xl mt-4 max-w-xl leading-relaxed">{member.bio}</p>
@@ -447,7 +456,7 @@ function MemberPortfolio({ member }: { member: Member }) {
               WORK EXPERIENCE
             </h3>
             <div className="space-y-4">
-              {cv.workHistory.map((w, i) => (
+              {workHistory.map((w, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, x: -10 }}
@@ -477,7 +486,7 @@ function MemberPortfolio({ member }: { member: Member }) {
               EDUCATION
             </h3>
             <div className="space-y-4">
-              {cv.education.map((e, i) => (
+              {education.map((e, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, x: -10 }}
@@ -505,7 +514,7 @@ function MemberPortfolio({ member }: { member: Member }) {
             SKILLS MATRIX
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-            {cv.skills.map((s, i) => (
+            {skills.map((s, i) => (
               <SkillBar key={i} name={s.name} level={s.level} category={s.category} />
             ))}
           </div>
@@ -562,10 +571,10 @@ function MemberPortfolio({ member }: { member: Member }) {
         <div className="border-4 border-black dark:border-white bg-white dark:bg-[#1a1a1a] p-5 shadow-[6px_6px_0_#000] dark:shadow-[6px_6px_0_#fff]">
           <h3 className="font-bebas text-4xl text-black dark:text-white mb-4 flex items-center gap-2 border-b-4 border-black dark:border-white pb-2">
             <Package className="w-6 h-6" style={{ color: memberColor }} />
-            PROJECTS ({cv.projects.length})
+            PROJECTS ({projects.length})
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {cv.projects.map((p) => (
+            {projects.map((p) => (
               <ProjectMini key={p.id} p={p} />
             ))}
           </div>
@@ -585,7 +594,10 @@ function MemberPortfolio({ member }: { member: Member }) {
 export function PortfolioPage() {
   // Fetch members from API (DB-backed) with static fallback
   const { data: membersData } = useFetch<{ members: Member[] }>("/api/members");
-  const members = membersData?.members ?? MEMBERS;
+  const { godMode } = useChaos();
+  const HIDDEN_IDS = new Set(MEMBERS.filter((m) => m.hidden).map((m) => m.id));
+  const allMembers = membersData?.members ?? MEMBERS;
+  const members = allMembers.filter((m) => !HIDDEN_IDS.has(m.id) || godMode);
   const [selectedId, setSelectedId] = useState("aldi");
   useScrollReveal();
 
@@ -620,7 +632,7 @@ export function PortfolioPage() {
             Bukan cuma player. Kami juga builder. Pilih entitas untuk lihat profil lengkapnya.
           </p>
           <div className="mt-4 font-mono-ud text-sm text-black/60 dark:text-white/60">
-            ▸ {MEMBERS.length} ENTITIES · CV + PROJECTS + ACHIEVEMENTS
+            ▸ {members.length} ENTITIES · CV + PROJECTS + ACHIEVEMENTS
           </div>
         </div>
 
@@ -647,7 +659,7 @@ export function PortfolioPage() {
               </button>
             </div>
           </div>
-          <MemberSelector members={MEMBERS} selectedId={selectedId} onSelect={setSelectedId} />
+          <MemberSelector members={members} selectedId={selectedId} onSelect={setSelectedId} />
         </div>
 
         {/* Member portfolio */}

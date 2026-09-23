@@ -16,6 +16,7 @@ import { CosmicStarMap } from "./cosmic-star-map";
 import { ChaosDice } from "./chaos-dice";
 import { NewsPortal } from "./news-portal";
 import { MEMBERS, HARAPAN, type Member } from "@/lib/undimension/data";
+import { useChaos } from "./chaos-provider";
 import { useFetch } from "@/hooks/use-fetch";
 import { useScrollReveal } from "@/hooks/use-scroll-reveal";
 import { useSfx } from "@/hooks/use-sfx";
@@ -391,7 +392,10 @@ function HarapanSection() {
 export function AboutPage() {
   // Fetch members from API (DB-backed) with static fallback
   const { data: membersData } = useFetch<{ members: Member[] }>("/api/members");
-  const members = membersData?.members ?? MEMBERS;
+  const { godMode } = useChaos();
+  const HIDDEN_IDS = new Set(MEMBERS.filter((m) => m.hidden).map((m) => m.id));
+  const allMembers = membersData?.members ?? MEMBERS;
+  const members = allMembers.filter((m) => !HIDDEN_IDS.has(m.id) || godMode);
 
   const [selected, setSelected] = useState<Member | null>(null);
   const lastOpenedIdRef = useRef<string | null>(null);

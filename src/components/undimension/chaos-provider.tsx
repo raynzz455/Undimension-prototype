@@ -97,6 +97,9 @@ export function ChaosProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem("ud-godmode");
         localStorage.removeItem("ud-godmode-expires");
         localStorage.removeItem("ud-chaos-token");
+        localStorage.removeItem("ud-chaos");
+        localStorage.removeItem("ud-chaos-palette");
+        setChaos(false);
       }
     });
   }, []);
@@ -125,7 +128,6 @@ export function ChaosProvider({ children }: { children: ReactNode }) {
       const expiresAt = Date.now() + GOD_MODE_TTL_MS;
       localStorage.setItem("ud-godmode-expires", String(expiresAt));
     };
-    refreshExpiry();
     const events = ["keydown", "mousedown", "touchstart", "wheel"] as const;
     let throttle = 0;
     const onActivity = () => {
@@ -144,6 +146,9 @@ export function ChaosProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem("ud-godmode");
         localStorage.removeItem("ud-godmode-expires");
         localStorage.removeItem("ud-chaos-token");
+        localStorage.removeItem("ud-chaos");
+        localStorage.removeItem("ud-chaos-palette");
+        setChaos(false);
         setGodMode(false);
       }
     }, 30000); // check every 30 seconds

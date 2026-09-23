@@ -1,0 +1,1628 @@
+     1→"use client";
+     2→
+     3→import { useState, useEffect } from "react";
+     4→import { motion } from "framer-motion";
+     5→import {
+     6→  Upload, Loader2, Image as ImageIcon, LogOut, Shield, Zap,
+     7→  FolderOpen, Award, Settings, Newspaper, MessageSquare,
+     8→  Trash2, Edit3, Pin, PinOff, CheckCircle, XCircle, X,
+     9→  Users, Plus, Quote as QuoteIcon, RefreshCw, History,
+    10→} from "lucide-react";
+    11→import { StarField } from "./star-field";
+    12→import { useFetch } from "@/hooks/use-fetch";
+    13→import { useChaosFetch } from "@/hooks/use-chaos-fetch";
+    14→import { useSfx } from "@/hooks/use-sfx";
+    15→import { cn } from "@/lib/utils";
+    16→import { UnavailablePhoto } from "./unavailable-photo";
+    17→import type { GalleryPhoto, Member } from "@/lib/undimension/data";
+    18→
+    19→type Tab = "about" | "gallery" | "news" | "guestbook" | "portfolio" | "games" | "info";
+    20→
+    21→// Actual member slugs (from data.ts `id` field — used as DB FK).
+    22→// NOTE: the old list used nicks (rembo, eja, byan, acong, tipki) which are NOT
+    23→// the slugs — that was a bug causing FK violations. Fixed to real slugs.
+    24→const MEMBER_SLUGS = ["aldi", "razka", "reza", "abyan", "rasya", "rifqi", "dudit"];
+    25→const PORTFOLIO_CATEGORIES = ["WEB", "GAME", "MOBILE", "TOOL", "BOT", "OTHER"];
+    26→const PORTFOLIO_STATUSES = ["LIVE", "WIP", "ARCHIVED"];
+    27→
+    28→// ═══════════════════════════════════════════════════════════════════════════
+    29→// MAIN CHAOS MODE PAGE
+    30→// ═══════════════════════════════════════════════════════════════════════════
+    31→function ChaosModePage({ onExit }: { onExit: () => void }) {
+    32→  const [tab, setTab] = useState<Tab>("about");
+    33→  const { play } = useSfx();
+    34→
+    35→  const tabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    36→    { key: "about", label: "ABOUT", icon: Users },
+    37→    { key: "gallery", label: "GALLERY", icon: ImageIcon },
+    38→    { key: "news", label: "NEWS", icon: Newspaper },
+    39→    { key: "guestbook", label: "GUESTBOOK", icon: MessageSquare },
+    40→    { key: "portfolio", label: "PORTFOLIO", icon: FolderOpen },
+    41→    { key: "games", label: "GAMES", icon: Plus },
+    42→    { key: "info", label: "INFO", icon: Settings },
+    43→  ];
+    44→
+    45→  return (
+    46→    <div className="page-enter bg-[#09090b] min-h-screen relative overflow-hidden pt-24 pb-12">
+    47→      <StarField variant="dark" className="fixed z-[1]" />
+    48→      <div className="ud-grain" aria-hidden />
+    49→
+    50→      {/* Header bar */}
+    51→      <div className="fixed top-0 left-0 right-0 z-50 bg-[#ff00ff] text-white border-b-4 border-black px-4 py-2 flex items-center justify-between">
+    52→        <div className="flex items-center gap-2">
+    53→          <Shield className="w-5 h-5" />
+    54→          <span className="font-bebas text-xl tracking-widest">⚡ CHAOS MODE — MEMBER AREA</span>
+    55→        </div>
+    56→        <button onClick={() => { play("close"); onExit(); }}
+    57→          className="flex items-center gap-1 bg-black text-white font-mono-ud text-xs font-black px-3 py-1.5 border-2 border-white hover:bg-[#ff4d4d] transition-colors no-color-transition">
+    58→          <LogOut className="w-3 h-3" /> EXIT
+    59→        </button>
+    60→      </div>
+    61→
+    62→      <div className="max-w-5xl mx-auto px-4 md:px-6 relative z-10">
+    63→        {/* Title */}
+    64→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-6">
+    65→          <div className="inline-flex items-center gap-2 bg-[#d4ff00] text-black font-mono-ud text-xs font-black px-3 py-1 border-4 border-black mb-3">
+    66→            <Zap className="w-4 h-4" /> GOD MODE ACTIVE
+    67→          </div>
+    68→          <h1 className="font-bebas text-5xl md:text-[80px] leading-none uppercase text-white" style={{ textShadow: "4px 4px 0px #ff00ff, 8px 8px 0px #00e5ff" }}>
+    69→            CHAOS MODE
+    70→          </h1>
+    71→          <p className="font-mono-ud text-xs text-white/60 mt-1 tracking-wider">
+    72→            ▸ MEMBER-ONLY · CRUD MANAGEMENT · ALL IN ONE
+    73→          </p>
+    74→        </motion.div>
+    75→
+    76→        {/* Tab bar */}
+    77→        <div className="flex flex-wrap gap-2 mb-6 border-4 border-[#ff00ff] bg-black p-2">
+    78→          {tabs.map((t) => {
+    79→            const Icon = t.icon;
+    80→            return (
+    81→              <button key={t.key} onClick={() => { play("click"); setTab(t.key); }}
+    82→                className={cn("flex items-center gap-2 px-4 py-2 border-2 font-bebas text-lg tracking-wider transition-all no-color-transition",
+    83→                  tab === t.key ? "bg-[#ff00ff] text-white border-white" : "bg-transparent text-white/50 border-white/20 hover:text-white hover:border-white/50")}>
+    84→                <Icon className="w-4 h-4" /> {t.label}
+    85→              </button>
+    86→            );
+    87→          })}
+    88→        </div>
+    89→
+    90→        {/* Tab content */}
+    91→        {tab === "about" && (<><MembersTab /><QuotesSection /></>)}
+    92→        {tab === "gallery" && <GalleryTab />}
+    93→        {tab === "news" && <NewsTab />}
+    94→        {tab === "guestbook" && <GuestbookTab />}
+    95→        {tab === "portfolio" && (<><PortfolioTab /><AchievementsTab /></>)}
+    96→        {tab === "games" && <GamesTab />}
+    97→        {tab === "info" && <InfoTab />}
+    98→      </div>
+    99→    </div>
+   100→  );
+   101→}
+   102→
+   103→// ═══════════════════════════════════════════════════════════════════════════
+   104→// MEMBERS TAB — Full member profile + CV editing
+   105→// ═══════════════════════════════════════════════════════════════════════════
+   106→function MembersTab() {
+   107→  const { data, refetch } = useFetch<{ members: Member[] }>("/api/members");
+   108→  const { chaosFetch } = useChaosFetch();
+   109→  const { play } = useSfx();
+   110→  const members = data?.members ?? [];
+   111→
+   112→  const [selectedSlug, setSelectedSlug] = useState("");
+   113→  const [name, setName] = useState("");
+   114→  const [nick, setNick] = useState("");
+   115→  const [role, setRole] = useState("");
+   116→  const [img, setImg] = useState("");
+   117→  const [color, setColor] = useState("#ff4d4d");
+   118→  const [highlight, setHighlight] = useState("#ff4d4d");
+   119→  const [bio, setBio] = useState("");
+   120→  const [tagline, setTagline] = useState("");
+   121→  const [quote, setQuote] = useState("");
+   122→  const [element, setElement] = useState("");
+   123→  const [joinYear, setJoinYear] = useState("2020");
+   124→  const [stats, setStats] = useState<{ label: string; value: string }[]>(
+   125→    Array.from({ length: 6 }, (_, i) => ({ label: ["STR","DEX","CON","INT","WIS","CHA"][i] ?? "", value: "10" }))
+   126→  );
+   127→  const [socials, setSocials] = useState<{ label: string; href: string }[]>(Array.from({ length: 3 }, () => ({ label: "", href: "" })));
+   128→  const [funFactsText, setFunFactsText] = useState("");
+   129→  const [taglineCareer, setTaglineCareer] = useState("");
+   130→  const [location, setLocation] = useState("");
+   131→  const [availability, setAvailability] = useState("EMPLOYED");
+   132→  const [workHistory, setWorkHistory] = useState<{ company: string; role: string; period: string; description: string; current: boolean }[]>([]);
+   133→  const [education, setEducation] = useState<{ school: string; degree: string; period: string; description: string }[]>([]);
+   134→  const [skills, setSkills] = useState<{ name: string; level: number; category: string }[]>([]);
+   135→  const [saving, setSaving] = useState(false);
+   136→  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+   137→  const [error, setError] = useState<string | null>(null);
+   138→  const [success, setSuccess] = useState<string | null>(null);
+   139→  const [restoring, setRestoring] = useState<string | null>(null);
+   140→
+   141→  // Fetch profile history for selected member
+   142→  const { data: historyData, refetch: refetchHistory } = useFetch<{ history: { id: string; createdAt: string; name: string; nick: string; img: string; role: string }[]; count: number }>(
+   143→    selectedSlug ? `/api/members/${selectedSlug}/history` : ""
+   144→  );
+   145→  const history = historyData?.history ?? [];
+   146→
+   147→  useEffect(() => {
+   148→    if (!selectedSlug && members[0]?.id) setSelectedSlug(members[0].id);
+   149→  }, [members, selectedSlug]);
+   150→
+   151→  useEffect(() => {
+   152→    if (!selectedSlug) return;
+   153→    const m = members.find((x) => x.id === selectedSlug);
+   154→    if (!m) return;
+   155→    setName(m.name); setNick(m.nick); setRole(m.role); setImg(m.img);
+   156→    const extractHex = (cls: string) => { const match = cls.match(/#([0-9a-fA-F]{3,8})/); return match ? `#${match[1]}` : "#ff4d4d"; };
+   157→    setColor(extractHex(m.color)); setHighlight(extractHex(m.highlight));
+   158→    setBio(m.bio); setTagline(m.tagline || ""); setQuote(m.quote || "");
+   159→    setElement(m.element || ""); setJoinYear(m.joinYear || "2020");
+   160→    setStats(Array.from({ length: 6 }, (_, i) => ({ label: m.stats?.[i]?.label ?? ["STR","DEX","CON","INT","WIS","CHA"][i] ?? "", value: m.stats?.[i]?.value ?? "10" })));
+   161→    setSocials(Array.from({ length: 3 }, (_, i) => ({ label: m.socials?.[i]?.label ?? "", href: m.socials?.[i]?.href ?? "" })));
+   162→    setFunFactsText((m.funFacts || []).join("\n"));
+   163→    setTaglineCareer(m.taglineCareer || ""); setLocation(m.location || ""); setAvailability(m.availability || "EMPLOYED");
+   164→    setWorkHistory(m.workHistory || []); setEducation(m.education || []); setSkills(m.skills || []);
+   165→    setError(null); setSuccess(null);
+   166→  }, [selectedSlug, members]);
+   167→
+   168→  const updateStat = (i: number, key: "label" | "value", v: string) => setStats((prev) => prev.map((s, idx) => (idx === i ? { ...s, [key]: v } : s)));
+   169→  const updateSocial = (i: number, key: "label" | "href", v: string) => setSocials((prev) => prev.map((s, idx) => (idx === i ? { ...s, [key]: v } : s)));
+   170→
+   171→  const handleSave = async () => {
+   172→    if (!selectedSlug) { setError("Pilih member dulu."); return; }
+   173→    if (!name.trim() || !nick.trim()) { setError("Name dan nick wajib diisi."); return; }
+   174→    setSaving(true); setError(null); setSuccess(null);
+   175→    try {
+   176→      const funFacts = funFactsText.split("\n").map((s) => s.trim()).filter(Boolean).slice(0, 8);
+   177→      const payload = {
+   178→        name: name.trim(), nick: nick.trim(), role: role.trim(), img: img.trim(),
+   179→        color: `bg-[${color}]`, highlight: `text-[${highlight}]`,
+   180→        bio: bio.trim(), tagline: tagline.trim(), quote: quote.trim(),
+   181→        element: element.trim().toUpperCase(), joinYear: joinYear.trim(),
+   182→        stats: stats.filter((s) => s.label && s.value),
+   183→        socials: socials.filter((s) => s.label && s.href), funFacts,
+   184→        taglineCareer: taglineCareer.trim(), location: location.trim(), availability,
+   185→        workHistory, education, skills,
+   186→      };
+   187→      const res = await chaosFetch(`/api/members/${encodeURIComponent(selectedSlug)}`, { method: "PUT", body: JSON.stringify(payload) });
+   188→      const d = await res.json();
+   189→      if (!res.ok) throw new Error(d.error || d.message || "Gagal update member");
+   190→      setSuccess(`✓ ${d.member?.nick ?? nick} updated!`);
+   191→      refetch(); play("submit");
+   192→      setTimeout(() => setSuccess(null), 5000);
+   193→    } catch (e) { setError(e instanceof Error ? e.message : "Gagal update member"); }
+   194→    finally { setSaving(false); }
+   195→  };
+   196→
+   197→  const handleRestore = async (historyId: string, dateStr: string) => {
+   198→    if (!confirm(`Restore profile dari ${dateStr}? Profile saat ini akan disimpan sebagai history.`)) return;
+   199→    setRestoring(historyId);
+   200→    setError(null); setSuccess(null);
+   201→    try {
+   202→      const res = await chaosFetch(`/api/members/${encodeURIComponent(selectedSlug)}/history`, {
+   203→        method: "POST",
+   204→        body: JSON.stringify({ historyId }),
+   205→      });
+   206→      const d = await res.json();
+   207→      if (!res.ok) throw new Error(d.error || "Gagal restore");
+   208→      setSuccess(`✓ Profile restored dari ${dateStr}`);
+   209→      refetch(); refetchHistory(); play("submit");
+   210→      setTimeout(() => setSuccess(null), 5000);
+   211→    } catch (e) { setError(e instanceof Error ? e.message : "Gagal restore"); }
+   212→    finally { setRestoring(null); }
+   213→  };
+   214→
+   215→  const STAT_LABELS = ["STR", "DEX", "CON", "INT", "WIS", "CHA"];
+   216→
+   217→  return (
+   218→    <div className="space-y-4">
+   219→      <div className="border-8 border-[#d4ff00] bg-black p-6 shadow-[12px_12px_0_#d4ff00]">
+   220→        <h2 className="font-bebas text-4xl text-[#d4ff00] mb-4 flex items-center gap-2">
+   221→          <Users className="w-8 h-8" /> EDIT MEMBER PROFILE
+   222→        </h2>
+   223→
+   224→        {/* Member selector */}
+   225→        <label className="block mb-4">
+   226→          <span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">SELECT MEMBER</span>
+   227→          <select value={selectedSlug} onChange={(e) => { play("click"); setSelectedSlug(e.target.value); }}
+   228→            className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]">
+   229→            {members.length === 0 && <option value="">Loading…</option>}
+   230→            {members.map((m) => (<option key={m.id} value={m.id}>{m.id.toUpperCase()} · {m.nick} ({m.role})</option>))}
+   231→          </select>
+   232→        </label>
+   233→
+   234→        {/* Basic identity */}
+   235→        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+   236→          <label className="block">
+   237→            <span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">NAME</span>
+   238→            <input value={name} onChange={(e) => setName(e.target.value.slice(0, 100))} className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" />
+   239→          </label>
+   240→          <label className="block">
+   241→            <span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">NICK</span>
+   242→            <input value={nick} onChange={(e) => setNick(e.target.value.slice(0, 50))} className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" />
+   243→          </label>
+   244→          <label className="block">
+   245→            <span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">ROLE</span>
+   246→            <input value={role} onChange={(e) => setRole(e.target.value.slice(0, 80))} className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" />
+   247→          </label>
+   248→          <label className="block">
+   249→            <span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">PHOTO</span>
+   250→            <div className="mt-1 space-y-2">
+   251→              {img && (<div className="relative w-full max-w-[120px] aspect-[3/4] border-2 border-[#d4ff00]/40 overflow-hidden bg-black"><img src={img} alt="Preview" className="w-full h-full object-cover" /></div>)}
+   252→              <label className="block">
+   253→                <span className="font-mono-ud text-[10px] text-[#d4ff00]/60">▸ Upload photo (max 4MB):</span>
+   254→                <input type="file" accept="image/*" onChange={async (e) => {
+   255→                  const f = e.target.files?.[0]; if (!f) return; setUploadingPhoto(true);
+   256→                  try {
+   257→                    const form = new FormData(); form.append("file", f);
+   258→                    const res = await chaosFetch("/api/members/upload", { method: "POST", body: form });
+   259→                    const d = await res.json(); if (!res.ok) throw new Error(d.error || "Upload gagal");
+   260→                    setImg(d.url); setSuccess(`✓ Photo uploaded (${d.sizeKb}KB)`); play("submit");
+   261→                    setTimeout(() => setSuccess(null), 3000);
+   262→                  } catch (err) { setError(err instanceof Error ? err.message : "Upload gagal"); }
+   263→                  finally { setUploadingPhoto(false); }
+   264→                }} className="block w-full text-xs font-mono-ud text-white file:mr-3 file:py-2 file:px-4 file:border-2 file:border-[#d4ff00] file:bg-[#d4ff00] file:text-black file:font-bold file:cursor-pointer file:hover:bg-[#ff00ff] file:hover:text-white" />
+   265→              </label>
+   266→              <input value={img} onChange={(e) => setImg(e.target.value.slice(0, 500))} placeholder="/members/member-xxx.webp (atau paste URL gambar)" className="block w-full px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" />
+   267→            </div>
+   268→          </label>
+   269→        </div>
+   270→
+   271→        {/* Color + element + join year */}
+   272→        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+   273→          <label className="block"><span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">COLOR</span><input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="block w-full mt-1 h-10 border-2 border-[#d4ff00] bg-transparent cursor-pointer" /></label>
+   274→          <label className="block"><span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">HIGHLIGHT</span><input type="color" value={highlight} onChange={(e) => setHighlight(e.target.value)} className="block w-full mt-1 h-10 border-2 border-[#d4ff00] bg-transparent cursor-pointer" /></label>
+   275→          <label className="block"><span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">ELEMENT</span><input value={element} onChange={(e) => setElement(e.target.value.slice(0, 30))} placeholder="FIRE / ICE…" className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
+   276→          <label className="block"><span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">JOIN YEAR</span><input value={joinYear} onChange={(e) => setJoinYear(e.target.value.slice(0, 10))} className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
+   277→        </div>
+   278→
+   279→        {/* Bio */}
+   280→        <label className="block mb-3">
+   281→          <span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">BIO</span>
+   282→          <span className="font-mono-ud text-[10px] text-[#d4ff00]/60 block mb-1">▸ Tip: Wrap teks dengan **double asterisk** untuk warna highlight.</span>
+   283→          <textarea value={bio} onChange={(e) => setBio(e.target.value.slice(0, 2000))} rows={4} placeholder="Bio member. Gunakan **teks** untuk highlight." className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm resize-none focus:outline-none focus:border-[#ff00ff]" />
+   284→        </label>
+   285→        <label className="block mb-3"><span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">TAGLINE</span><input value={tagline} onChange={(e) => setTagline(e.target.value.slice(0, 200))} className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
+   286→        <label className="block mb-3"><span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">QUOTE</span><textarea value={quote} onChange={(e) => setQuote(e.target.value.slice(0, 600))} rows={2} className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm resize-none focus:outline-none focus:border-[#ff00ff]" /></label>
+   287→
+   288→        {/* Career Info */}
+   289→        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+   290→          <label className="block"><span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">CAREER TAGLINE</span><input value={taglineCareer} onChange={(e) => setTaglineCareer(e.target.value.slice(0, 100))} placeholder="Full-Stack Developer" className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
+   291→          <label className="block"><span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">LOCATION</span><input value={location} onChange={(e) => setLocation(e.target.value.slice(0, 100))} placeholder="Jakarta, ID" className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
+   292→          <label className="block"><span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">AVAILABILITY</span>
+   293→            <select value={availability} onChange={(e) => setAvailability(e.target.value)} className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]">
+   294→              <option value="EMPLOYED">EMPLOYED</option><option value="OPEN TO WORK">OPEN TO WORK</option><option value="FREELANCE">FREELANCE</option><option value="STUDENT">STUDENT</option><option value="UNEMPLOYED">UNEMPLOYED</option>
+   295→            </select>
+   296→          </label>
+   297→        </div>
+   298→
+   299→        {/* Stats */}
+   300→        <div className="mb-3">
+   301→          <span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider block mb-1">D&D STATS (6)</span>
+   302→          <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+   303→            {stats.map((s, i) => (
+   304→              <div key={i} className="border-2 border-[#d4ff00]/40 p-2 bg-[#1a1a1a]">
+   305→                <input value={s.label} onChange={(e) => updateStat(i, "label", e.target.value.slice(0, 8))} placeholder={STAT_LABELS[i]} className="block w-full px-2 py-1 bg-black border border-[#d4ff00]/30 text-[#d4ff00] font-mono-ud text-xs text-center focus:outline-none focus:border-[#ff00ff]" />
+   306→                <input value={s.value} onChange={(e) => updateStat(i, "value", e.target.value.slice(0, 6))} type="number" min={0} max={99} className="block w-full mt-1 px-2 py-1 bg-black border border-[#d4ff00]/30 text-white font-bebas text-xl text-center focus:outline-none focus:border-[#ff00ff]" />
+   307→              </div>
+   308→            ))}
+   309→          </div>
+   310→        </div>
+   311→
+   312→        {/* Socials */}
+   313→        <div className="mb-3">
+   314→          <span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider block mb-1">SOCIALS (3 rows)</span>
+   315→          <span className="font-mono-ud text-[10px] text-[#d4ff00]/60 block mb-2">▸ Isi label + URL lengkap (mis. https://instagram.com/username)</span>
+   316→          <div className="space-y-2">
+   317→            {socials.map((s, i) => (
+   318→              <div key={i} className="grid grid-cols-1 md:grid-cols-3 gap-2">
+   319→                <input value={s.label} onChange={(e) => updateSocial(i, "label", e.target.value.slice(0, 30))} placeholder="INSTAGRAM" className="px-2 py-1.5 border-2 border-[#d4ff00]/40 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+   320→                <input value={s.href} onChange={(e) => updateSocial(i, "href", e.target.value.slice(0, 200))} placeholder="https://instagram.com/username" className="md:col-span-2 px-2 py-1.5 border-2 border-[#d4ff00]/40 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+   321→              </div>
+   322→            ))}
+   323→          </div>
+   324→        </div>
+   325→
+   326→        {/* Fun Facts */}
+   327→        <label className="block mb-3">
+   328→          <span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">FUN FACTS</span>
+   329→          <span className="font-mono-ud text-[10px] text-[#d4ff00]/60 block mb-1">▸ Satu fact per baris — tekan Enter (max 8).</span>
+   330→          <textarea value={funFactsText} onChange={(e) => setFunFactsText(e.target.value)} rows={5} placeholder={"Selalu jadi orang pertama yang online\nPemilik rekor paling sering ngajak nongkrong"} className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm resize-none focus:outline-none focus:border-[#ff00ff]" />
+   331→        </label>
+   332→
+   333→        {/* Work History */}
+   334→        <DynamicList title="WORK HISTORY" items={workHistory} setItems={setWorkHistory} fields={[
+   335→          { key: "company", placeholder: "Company", width: "md:col-span-2" },
+   336→          { key: "role", placeholder: "Role", width: "md:col-span-2" },
+   337→          { key: "period", placeholder: "2020-2024", width: "md:col-span-2" },
+   338→          { key: "description", placeholder: "Description", width: "md:col-span-5", textarea: true },
+   339→        ]} />
+   340→
+   341→        {/* Education */}
+   342→        <DynamicList title="EDUCATION" items={education} setItems={setEducation} fields={[
+   343→          { key: "school", placeholder: "School", width: "md:col-span-3" },
+   344→          { key: "degree", placeholder: "Degree", width: "md:col-span-2" },
+   345→          { key: "period", placeholder: "2018-2021", width: "md:col-span-1" },
+   346→          { key: "description", placeholder: "Description", width: "md:col-span-5", textarea: true },
+   347→        ]} />
+   348→
+   349→        {/* Skills */}
+   350→        <DynamicList title="SKILLS MATRIX" items={skills} setItems={setSkills} fields={[
+   351→          { key: "name", placeholder: "JavaScript", width: "md:col-span-3" },
+   352→          { key: "level", placeholder: "80", width: "md:col-span-1", type: "number" },
+   353→          { key: "category", placeholder: "FRONTEND", width: "md:col-span-2" },
+   354→        ]} />
+   355→
+   356→        {error && (<div className="bg-[#ff4d4d] text-white px-3 py-2 border-2 border-white font-mono-ud text-xs font-bold flex items-center gap-2 mb-3"><XCircle className="w-4 h-4" /> {error}</div>)}
+   357→        {success && (<div className="bg-[#00ff00] text-black px-3 py-2 border-2 border-black font-mono-ud text-xs font-bold flex items-center gap-2 mb-3"><CheckCircle className="w-4 h-4" /> {success}</div>)}
+   358→
+   359→        <button onClick={handleSave} disabled={saving || !selectedSlug}
+   360→          className={cn("w-full font-bebas text-3xl py-4 border-4 border-[#d4ff00] flex items-center justify-center gap-2 transition-all no-color-transition",
+   361→            saving || uploadingPhoto ? "bg-[#1a1a1a] text-white/50 cursor-wait" : "bg-[#d4ff00] text-black hover:-translate-y-1 hover:bg-[#ff00ff] hover:text-white hover:border-white")}>
+   362→          {saving || uploadingPhoto ? <><Loader2 className="w-6 h-6 animate-spin" /> SAVING...</> : <><Users className="w-6 h-6" /> SAVE MEMBER PROFILE</>}
+   363→        </button>
+   364→      </div>
+   365→
+   366→      {/* Profile History — restore previous profiles (max 4) */}
+   367→      {selectedSlug && history.length > 0 && (
+   368→        <div className="border-8 border-[#00e5ff] bg-black p-6 shadow-[12px_12px_0_#00e5ff]">
+   369→          <h2 className="font-bebas text-3xl text-[#00e5ff] mb-4 flex items-center gap-2">
+   370→            <History className="w-6 h-6" /> PROFILE HISTORY ({history.length}/4)
+   371→          </h2>
+   372→          <p className="font-mono-ud text-[10px] text-white/40 mb-3 tracking-wider">
+   373→            ▸ Snapshot profile sebelumnya. Klik RESTORE untuk kembalikan profile lama. Profile saat ini otomatis disimpan.
+   374→          </p>
+   375→          <div className="space-y-2">
+   376→            {history.map((h, i) => {
+   377→              const date = new Date(h.createdAt);
+   378→              const dateStr = date.toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
+   379→              return (
+   380→                <div key={h.id} className="border-2 border-[#00e5ff]/30 p-3 bg-black/50 flex items-center justify-between gap-2">
+   381→                  <div className="flex items-center gap-3 flex-1 min-w-0">
+   382→                    <img src={h.img} alt={h.nick} className="w-10 h-10 object-cover border-2 border-[#00e5ff]/50 flex-shrink-0" />
+   383→                    <div className="flex-1 min-w-0">
+   384→                      <div className="font-bebas text-lg text-white truncate">{h.name} · {h.role}</div>
+   385→                      <div className="font-mono-ud text-[10px] text-white/40">{dateStr}</div>
+   386→                    </div>
+   387→                  </div>
+   388→                  <button
+   389→                    onClick={() => handleRestore(h.id, dateStr)}
+   390→                    disabled={restoring === h.id}
+   391→                    className="bg-[#00e5ff] text-black font-bebas text-sm px-4 py-2 border-2 border-[#00e5ff] hover:bg-transparent hover:text-[#00e5ff] transition-colors no-color-transition disabled:opacity-50 min-w-[100px] min-h-[44px] flex items-center justify-center gap-1 flex-shrink-0"
+   392→                    title={`Restore profile dari ${dateStr}`}
+   393→                  >
+   394→                    {restoring === h.id ? <><Loader2 className="w-4 h-4 animate-spin" /> RESTORING...</> : <><History className="w-4 h-4" /> RESTORE</>}
+   395→                  </button>
+   396→                </div>
+   397→              );
+   398→            })}
+   399→          </div>
+   400→        </div>
+   401→      )}
+   402→    </div>
+   403→  );
+   404→}
+   405→
+   406→// ═══════════════════════════════════════════════════════════════════════════
+   407→// DYNAMIC LIST — reusable for work history, education, skills
+   408→// ═══════════════════════════════════════════════════════════════════════════
+   409→function DynamicList<T extends Record<string, unknown>>({
+   410→  title, items, setItems, fields,
+   411→}: {
+   412→  title: string;
+   413→  items: T[];
+   414→  setItems: (items: T[]) => void;
+   415→  fields: { key: string; placeholder: string; width?: string; textarea?: boolean; type?: string }[];
+   416→}) {
+   417→  const update = (i: number, key: string, v: string | number | boolean) => setItems(items.map((item, idx) => (idx === i ? { ...item, [key]: v } : item)));
+   418→  const add = () => { const newItem = {} as T; fields.forEach((f) => { (newItem as Record<string, unknown>)[f.key] = f.type === "number" ? 0 : ""; }); setItems([...items, newItem]); };
+   419→  const remove = (i: number) => setItems(items.filter((_, idx) => idx !== i));
+   420→
+   421→  return (
+   422→    <div className="mb-3">
+   423→      <div className="flex items-center justify-between mb-2">
+   424→        <span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">{title} ({items.length})</span>
+   425→        <button onClick={add} className="flex items-center gap-1 bg-[#d4ff00] text-black font-mono-ud text-xs font-black px-2 py-1 border-2 border-[#d4ff00] hover:bg-transparent hover:text-[#d4ff00] transition-colors no-color-transition min-h-[36px]"><Plus className="w-3 h-3" /> ADD</button>
+   426→      </div>
+   427→      <div className="space-y-2">
+   428→        {items.map((item, i) => (
+   429→          <div key={i} className="border-2 border-[#d4ff00]/30 p-2 bg-[#1a1a1a] relative">
+   430→            <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
+   431→              {fields.map((f) => (
+   432→                <div key={f.key} className={f.width || ""}>
+   433→                  {f.textarea ? (
+   434→                    <textarea value={String(item[f.key] ?? "")} onChange={(e) => update(i, f.key, e.target.value)} placeholder={f.placeholder} rows={1} className="w-full px-2 py-1.5 bg-black border border-[#d4ff00]/30 text-white font-mono-ud text-xs resize-none focus:outline-none focus:border-[#ff00ff]" />
+   435→                  ) : (
+   436→                    <input value={String(item[f.key] ?? "")} onChange={(e) => update(i, f.key, f.type === "number" ? Number(e.target.value) : e.target.value)} placeholder={f.placeholder} type={f.type || "text"} className="w-full px-2 py-1.5 bg-black border border-[#d4ff00]/30 text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+   437→                  )}
+   438→                </div>
+   439→              ))}
+   440→            </div>
+   441→            <button onClick={() => remove(i)} className="absolute top-1 right-1 p-1.5 bg-[#ff4d4d]/80 hover:bg-[#ff4d4d] text-white border border-white/30 transition-colors no-color-transition" title="Remove"><Trash2 className="w-3 h-3" /></button>
+   442→          </div>
+   443→        ))}
+   444→      </div>
+   445→    </div>
+   446→  );
+   447→}
+   448→
+   449→// ═══════════════════════════════════════════════════════════════════════════
+   450→// QUOTES SECTION — CRUD for "TRANSMISSION FROM THE COLLECTIVE"
+   451→// ═══════════════════════════════════════════════════════════════════════════
+   452→function QuotesSection() {
+   453→  const { data, refetch } = useFetch<{ quotes: { id: string; text: string; author: string }[] }>("/api/quotes");
+   454→  const { chaosFetch } = useChaosFetch();
+   455→  const { play } = useSfx();
+   456→  const [text, setText] = useState("");
+   457→  const [author, setAuthor] = useState("THE COLLECTIVE");
+   458→  const [error, setError] = useState<string | null>(null);
+   459→  const [success, setSuccess] = useState<string | null>(null);
+   460→  const [deletingId, setDeletingId] = useState<string | null>(null);
+   461→  const quotes = data?.quotes ?? [];
+   462→
+   463→  const handleCreate = async () => {
+   464→    if (!text.trim()) { setError("Text wajib diisi."); return; }
+   465→    setError(null);
+   466→    try {
+   467→      const res = await chaosFetch("/api/quotes", { method: "POST", body: JSON.stringify({ text, author }) });
+   468→      const d = await res.json(); if (!res.ok) throw new Error(d.error || "Gagal");
+   469→      setSuccess(`✓ Quote dibuat!`); setText(""); setAuthor("THE COLLECTIVE"); refetch(); play("submit");
+   470→      setTimeout(() => setSuccess(null), 3000);
+   471→    } catch (e) { setError(e instanceof Error ? e.message : "Gagal"); }
+   472→  };
+   473→
+   474→  const handleDelete = async (id: string, text: string) => {
+   475→    if (!confirm(`Hapus quote "${text.slice(0, 40)}..."?`)) return;
+   476→    setDeletingId(id);
+   477→    try {
+   478→      const res = await chaosFetch(`/api/quotes?id=${id}`, { method: "DELETE" });
+   479→      if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+   480→      setSuccess(`✓ Quote dihapus.`); refetch(); play("close");
+   481→      setTimeout(() => setSuccess(null), 3000);
+   482→    } catch (e) { setError(e instanceof Error ? e.message : "Gagal"); }
+   483→    finally { setDeletingId(null); }
+   484→  };
+   485→
+   486→  return (
+   487→    <div className="border-8 border-[#00e5ff] bg-black p-6 shadow-[12px_12px_0_#00e5ff] mt-4">
+   488→      <h2 className="font-bebas text-4xl text-[#00e5ff] mb-4 flex items-center gap-2">
+   489→        <QuoteIcon className="w-8 h-8" /> TRANSMISSION QUOTES
+   490→      </h2>
+   491→      <div className="space-y-3 mb-4">
+   492→        <textarea value={text} onChange={(e) => setText(e.target.value.slice(0, 500))} placeholder="Quote text..." rows={2} className="block w-full px-3 py-2 border-2 border-[#00e5ff] bg-[#1a1a1a] text-white font-mono-ud text-sm resize-none focus:outline-none focus:border-[#ff00ff]" />
+   493→        <div className="flex gap-2">
+   494→          <input value={author} onChange={(e) => setAuthor(e.target.value.slice(0, 50))} placeholder="AUTHOR" className="flex-1 px-3 py-2 border-2 border-[#00e5ff] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" />
+   495→          <button onClick={handleCreate} className="bg-[#00e5ff] text-black font-bebas text-xl px-6 py-2 border-2 border-[#00e5ff] hover:bg-transparent hover:text-[#00e5ff] transition-colors no-color-transition min-w-[100px]"><Plus className="w-4 h-4 inline mr-1" /> ADD</button>
+   496→        </div>
+   497→      </div>
+   498→      {error && <div className="bg-[#ff4d4d] text-white px-3 py-2 border-2 border-white font-mono-ud text-xs font-bold mb-3">! {error}</div>}
+   499→      {success && <div className="bg-[#00ff00] text-black px-3 py-2 border-2 border-black font-mono-ud text-xs font-bold mb-3">{success}</div>}
+   500→      <div className="space-y-2 max-h-[400px] overflow-y-auto">
+   501→        {quotes.map((q) => {
+   502→          const isStatic = q.id.startsWith("static-");
+   503→          return (
+   504→            <div key={q.id} className="border-2 border-[#00e5ff]/30 p-3 bg-black/50 flex items-start justify-between gap-2 group">
+   505→              <div className="flex-1 min-w-0">
+   506→                <div className="font-bebas text-lg text-white">"{q.text}"</div>
+   507→                <div className="font-mono-ud text-[10px] text-[#00e5ff]">— {q.author}{isStatic && <span className="text-[#ff8c00] ml-2">[STATIC]</span>}</div>
+   508→              </div>
+   509→              {!isStatic && (
+   510→                <button onClick={() => handleDelete(q.id, q.text)} disabled={deletingId === q.id} className="p-2.5 border-2 border-white/30 hover:border-[#ff4d4d] hover:bg-[#ff4d4d]/10 transition-colors no-color-transition disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0" title="Delete quote">
+   511→                  {deletingId === q.id ? <Loader2 className="w-5 h-5 animate-spin text-[#ff4d4d]" /> : <Trash2 className="w-5 h-5 text-[#ff4d4d]" />}
+   512→                </button>
+   513→              )}
+   514→            </div>
+   515→          );
+   516→        })}
+   517→      </div>
+   518→      <button onClick={() => { play("click"); refetch(); }} className="mt-3 font-mono-ud text-xs font-black bg-[#00e5ff] text-black px-3 py-1 border-2 border-[#00e5ff] hover:bg-transparent hover:text-[#00e5ff] transition-colors no-color-transition"><RefreshCw className="w-3 h-3 inline mr-1" /> REFRESH</button>
+   519→    </div>
+   520→  );
+   521→}
+   522→
+   523→// ═══════════════════════════════════════════════════════════════════════════
+   524→// GALLERY TAB — Upload + masonry + edit + delete
+   525→// ═══════════════════════════════════════════════════════════════════════════
+   526→function GalleryTab() {
+   527→  const { data, refetch } = useFetch<{ photos: GalleryPhoto[]; count: number }>("/api/gallery");
+   528→  const { chaosFetch } = useChaosFetch();
+   529→  const [title, setTitle] = useState("");
+   530→  const [author, setAuthor] = useState("");
+   531→  const [date, setDate] = useState(String(new Date().getFullYear()));
+   532→  const [file, setFile] = useState<File | null>(null);
+   533→  const [uploading, setUploading] = useState(false);
+   534→  const [error, setError] = useState<string | null>(null);
+   535→  const [success, setSuccess] = useState<string | null>(null);
+   536→  const [deletingId, setDeletingId] = useState<string | null>(null);
+   537→  const [editingPhoto, setEditingPhoto] = useState<GalleryPhoto | null>(null);
+   538→  const { play } = useSfx();
+   539→  const photos = data?.photos ?? [];
+   540→
+   541→  const handleUpload = async () => {
+   542→    if (!file || !title.trim()) { setError("Judul dan foto wajib diisi."); return; }
+   543→    setUploading(true); setError(null); setSuccess(null);
+   544→    try {
+   545→      const form = new FormData(); form.append("file", file); form.append("title", title); form.append("author", author || "ANON"); form.append("date", date);
+   546→      const res = await chaosFetch("/api/gallery/upload", { method: "POST", body: form });
+   547→      const d = await res.json(); if (!res.ok) throw new Error(d.error || "Upload gagal");
+   548→      setSuccess(`✓ ${d.title} uploaded!`); setTitle(""); setAuthor(""); setFile(null); refetch(); play("submit");
+   549→      setTimeout(() => setSuccess(null), 5000);
+   550→    } catch (e) { setError(e instanceof Error ? e.message : "Upload gagal"); }
+   551→    finally { setUploading(false); }
+   552→  };
+   553→
+   554→  const handleDelete = async (id: string, title: string) => {
+   555→    if (!confirm(`Hapus foto "${title}"?`)) return;
+   556→    setDeletingId(id);
+   557→    try {
+   558→      const res = await chaosFetch(`/api/gallery?id=${id}`, { method: "DELETE" });
+   559→      const d = await res.json(); if (!res.ok) throw new Error(d.error || "Gagal hapus");
+   560→      setSuccess(`✓ Foto dihapus.`); refetch(); play("close");
+   561→      setTimeout(() => setSuccess(null), 3000);
+   562→    } catch (e) { setError(e instanceof Error ? e.message : "Gagal"); }
+   563→    finally { setDeletingId(null); }
+   564→  };
+   565→
+   566→  const isDbPhoto = (id: string) => !id.startsWith("g") || id.length > 3;
+   567→
+   568→  return (
+   569→    <div className="space-y-4">
+   570→      <div className="border-8 border-[#ff00ff] bg-black p-6 shadow-[12px_12px_0_#ff00ff]">
+   571→        <h2 className="font-bebas text-4xl text-[#ff00ff] mb-4 flex items-center gap-2"><Upload className="w-8 h-8" /> UPLOAD GALLERY PHOTO</h2>
+   572→        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   573→          <div className="space-y-3">
+   574→            <label className="block"><span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">FOTO * (max 4MB)</span><input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="block w-full mt-1 text-xs font-mono-ud text-white file:mr-3 file:py-2 file:px-4 file:border-2 file:border-[#d4ff00] file:bg-[#d4ff00] file:text-black file:font-bold file:cursor-pointer file:hover:bg-[#ff00ff] file:hover:text-white" /></label>
+   575→            <label className="block"><span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">JUDUL *</span><input value={title} onChange={(e) => setTitle(e.target.value.slice(0, 40))} placeholder="VISI AWAL" className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
+   576→          </div>
+   577→          <div className="space-y-3">
+   578→            <label className="block"><span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">OLEH</span><input value={author} onChange={(e) => setAuthor(e.target.value.slice(0, 30))} placeholder="ALDI" className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
+   579→            <label className="block"><span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">TAHUN</span><input value={date} onChange={(e) => setDate(e.target.value)} className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
+   580→          </div>
+   581→        </div>
+   582→        {error && <div className="mt-4 bg-[#ff4d4d] text-white px-3 py-2 border-2 border-white font-mono-ud text-xs font-bold">! {error}</div>}
+   583→        {success && <div className="mt-4 bg-[#00ff00] text-black px-3 py-2 border-2 border-black font-mono-ud text-xs font-bold">{success}</div>}
+   584→        <button onClick={handleUpload} disabled={uploading} className={cn("mt-4 w-full font-bebas text-3xl py-4 border-4 border-[#d4ff00] flex items-center justify-center gap-2 transition-all no-color-transition", uploading ? "bg-[#1a1a1a] text-white/50 cursor-wait" : "bg-[#d4ff00] text-black hover:-translate-y-1 hover:bg-[#ff00ff] hover:text-white hover:border-white")}>
+   585→          {uploading ? <><Loader2 className="w-6 h-6 animate-spin" /> UPLOADING...</> : <><Upload className="w-6 h-6" /> UPLOAD TO GALLERY</>}
+   586→        </button>
+   587→      </div>
+   588→
+   589→      {/* Gallery archive — masonry */}
+   590→      <div className="border-4 border-[#00e5ff] bg-[#1a1a1a] p-4 shadow-[8px_8px_0_#00e5ff]">
+   591→        <div className="flex items-center justify-between mb-3">
+   592→          <h3 className="font-bebas text-2xl text-[#00e5ff] flex items-center gap-2"><ImageIcon className="w-5 h-5" /> ARCHIVE ({photos.length})</h3>
+   593→          <button onClick={() => { play("click"); refetch(); }} className="font-mono-ud text-xs font-black bg-[#00e5ff] text-black px-3 py-1 border-2 border-[#00e5ff] hover:bg-transparent hover:text-[#00e5ff] transition-colors no-color-transition">↻ REFRESH</button>
+   594→        </div>
+   595→        <div className="columns-2 sm:columns-3 md:columns-4 gap-3 max-h-[600px] overflow-y-auto">
+   596→          {photos.map((p) => {
+   597→            const canEdit = isDbPhoto(p.id);
+   598→            return (
+   599→              <div key={p.id} className="break-inside-avoid mb-3 border-2 border-[#00e5ff]/30 p-2 bg-black/50 relative group">
+   600→                <img src={p.img} alt={p.title} className="w-full h-auto object-cover" loading="lazy" />
+   601→                <div className="mt-1.5"><div className="font-mono-ud text-[10px] text-[#00e5ff] truncate font-bold">{p.title}</div><div className="font-mono-ud text-[8px] text-white/40">{p.author} · {p.date}</div></div>
+   602→                {canEdit ? (
+   603→                  <div className="absolute top-2 right-2 flex gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+   604→                    <button onClick={() => setEditingPhoto(p)} className="bg-[#00e5ff] text-black p-2 border-2 border-white hover:bg-[#00b8cc] transition-colors no-color-transition" title="Edit"><Edit3 className="w-4 h-4" /></button>
+   605→                    <button onClick={() => handleDelete(p.id, p.title)} disabled={deletingId === p.id} className="bg-[#ff4d4d] text-white p-2 border-2 border-white hover:bg-[#ff0000] disabled:opacity-50 transition-colors no-color-transition" title="Delete">{deletingId === p.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}</button>
+   606→                  </div>
+   607→                ) : (<div className="absolute top-2 right-2 bg-black/70 text-white/60 px-2 py-1 font-mono-ud text-[9px] font-bold border border-white/30">SEED</div>)}
+   608→              </div>
+   609→            );
+   610→          })}
+   611→        </div>
+   612→      </div>
+   613→
+   614→      {editingPhoto && (<EditPhotoModal photo={editingPhoto} onClose={() => setEditingPhoto(null)} onSaved={() => { setEditingPhoto(null); refetch(); }} />)}
+   615→    </div>
+   616→  );
+   617→}
+   618→
+   619→// ═══════════════════════════════════════════════════════════════════════════
+   620→// EDIT PHOTO MODAL
+   621→// ═══════════════════════════════════════════════════════════════════════════
+   622→function EditPhotoModal({ photo, onClose, onSaved }: { photo: GalleryPhoto; onClose: () => void; onSaved: () => void }) {
+   623→  const { chaosFetch } = useChaosFetch();
+   624→  const { play } = useSfx();
+   625→  const [title, setTitle] = useState(photo.title);
+   626→  const [author, setAuthor] = useState(photo.author);
+   627→  const [date, setDate] = useState(photo.date);
+   628→  const [saving, setSaving] = useState(false);
+   629→  const [error, setError] = useState<string | null>(null);
+   630→
+   631→  useEffect(() => {
+   632→    document.body.classList.add("modal-open");
+   633→    return () => { document.body.classList.remove("modal-open"); };
+   634→  }, []);
+   635→
+   636→  const handleSave = async () => {
+   637→    if (!title.trim()) { setError("Judul wajib diisi."); return; }
+   638→    setSaving(true); setError(null);
+   639→    try {
+   640→      const res = await chaosFetch("/api/gallery", { method: "PUT", body: JSON.stringify({ id: photo.id, title, author, date }) });
+   641→      const d = await res.json(); if (!res.ok) throw new Error(d.error || "Gagal");
+   642→      play("submit"); onSaved();
+   643→    } catch (e) { setError(e instanceof Error ? e.message : "Gagal"); }
+   644→    finally { setSaving(false); }
+   645→  };
+   646→
+   647→  return (
+   648→    <div className="fixed inset-0 z-[200] overflow-y-auto" onClick={onClose}>
+   649→      <div className="flex min-h-full items-center justify-center p-3 md:p-6 py-8">
+   650→        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" />
+   651→        <div className="relative w-full max-w-md">
+   652→          <button onClick={onClose} className="absolute -top-4 -right-4 z-30 w-10 h-10 flex items-center justify-center bg-[#ff4d4d] text-white border-4 border-white shadow-[4px_4px_0_#000] hover:rotate-90 transition-transform no-color-transition" aria-label="Close"><X className="w-5 h-5" /></button>
+   653→          <div className="relative bg-[#1a1a1a] border-4 border-[#00e5ff] p-6 shadow-[8px_8px_0_#00e5ff] max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+   654→            <h3 className="font-bebas text-3xl text-[#00e5ff] mb-4 flex items-center gap-2"><Edit3 className="w-6 h-6" /> EDIT PHOTO</h3>
+   655→            <img src={photo.img} alt={photo.title} className="w-full max-h-48 object-contain mb-4 border-2 border-white/20" />
+   656→            <div className="space-y-3">
+   657→              <label className="block"><span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">JUDUL</span><input value={title} onChange={(e) => setTitle(e.target.value.slice(0, 40))} className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-black text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
+   658→              <label className="block"><span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">OLEH</span><input value={author} onChange={(e) => setAuthor(e.target.value.slice(0, 30))} className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-black text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
+   659→              <label className="block"><span className="font-mono-ud text-xs font-bold text-[#d4ff00] tracking-wider">TAHUN</span><input value={date} onChange={(e) => setDate(e.target.value)} className="block w-full mt-1 px-3 py-2 border-2 border-[#d4ff00] bg-black text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
+   660→              {error && <div className="bg-[#ff4d4d] text-white px-3 py-2 border-2 border-white font-mono-ud text-xs font-bold">! {error}</div>}
+   661→              <div className="flex gap-2 pt-2">
+   662→                <button onClick={onClose} className="flex-1 bg-transparent text-white font-bebas text-xl py-3 border-2 border-white/30 hover:border-white hover:bg-white/5 transition-colors no-color-transition">CANCEL</button>
+   663→                <button onClick={handleSave} disabled={saving} className="flex-1 bg-[#00e5ff] text-black font-bebas text-xl py-3 border-2 border-[#00e5ff] hover:bg-[#00b8cc] disabled:opacity-50 transition-colors no-color-transition flex items-center justify-center gap-2">{saving ? <><Loader2 className="w-5 h-5 animate-spin" /> SAVING...</> : <>✓ SAVE</>}</button>
+   664→              </div>
+   665→            </div>
+   666→          </div>
+   667→        </div>
+   668→      </div>
+   669→    </div>
+   670→  );
+   671→}
+   672→
+   673→// ═══════════════════════════════════════════════════════════════════════════
+   674→// NEWS TAB — Create + delete + pin
+   675→// ═══════════════════════════════════════════════════════════════════════════
+   676→function NewsTab() {
+   677→  const { data, refetch } = useFetch<{ articles: { id: string; title: string; body: string; category: string; author: string; pinned: boolean }[]; count: number }>("/api/news");
+   678→  const { chaosFetch } = useChaosFetch();
+   679→  const [title, setTitle] = useState("");
+   680→  const [body, setBody] = useState("");
+   681→  const [category, setCategory] = useState("UPDATE");
+   682→  const [author, setAuthor] = useState("");
+   683→  const [error, setError] = useState<string | null>(null);
+   684→  const [success, setSuccess] = useState<string | null>(null);
+   685→  const [deletingId, setDeletingId] = useState<string | null>(null);
+   686→  const { play } = useSfx();
+   687→  const articles = data?.articles ?? [];
+   688→
+   689→  const handleCreate = async () => {
+   690→    if (!title.trim() || !body.trim()) { setError("Title dan body wajib diisi."); return; }
+   691→    setError(null);
+   692→    try {
+   693→      const res = await chaosFetch("/api/news", { method: "POST", body: JSON.stringify({ title, body, category, author: author || "THE COLLECTIVE" }) });
+   694→      const d = await res.json(); if (!res.ok) throw new Error(d.error);
+   695→      setSuccess(`✓ "${d.title}" dipublikasikan!`); setTitle(""); setBody(""); setAuthor(""); refetch(); play("submit");
+   696→      setTimeout(() => setSuccess(null), 4000);
+   697→    } catch (e) { setError(e instanceof Error ? e.message : "Gagal"); }
+   698→  };
+   699→
+   700→  const handleDelete = async (id: string, title: string) => {
+   701→    if (!confirm(`Hapus artikel "${title}"?`)) return;
+   702→    setDeletingId(id);
+   703→    try { const res = await chaosFetch(`/api/news?id=${id}`, { method: "DELETE" }); if (!res.ok) throw new Error("Gagal"); setSuccess("✓ Dihapus."); refetch(); play("close"); setTimeout(() => setSuccess(null), 3000); }
+   704→    catch (e) { setError(e instanceof Error ? e.message : "Gagal"); } finally { setDeletingId(null); }
+   705→  };
+   706→
+   707→  const togglePin = async (a: { id: string; pinned: boolean }) => {
+   708→    try { const res = await chaosFetch("/api/news", { method: "PUT", body: JSON.stringify({ id: a.id, pinned: !a.pinned }) }); if (!res.ok) throw new Error("Gagal"); refetch(); play("click"); }
+   709→    catch (e) { setError(e instanceof Error ? e.message : "Gagal"); }
+   710→  };
+   711→
+   712→  const CATEGORIES = ["UPDATE", "EVENT", "CHAOS", "MILESTONE", "NOTICE"];
+   713→  const CAT_COLORS: Record<string, string> = { UPDATE: "#00e5ff", EVENT: "#ff4d4d", CHAOS: "#ff00ff", MILESTONE: "#d4ff00", NOTICE: "#ff8c00" };
+   714→
+   715→  return (
+   716→    <div className="space-y-4">
+   717→      <div className="border-8 border-[#00e5ff] bg-black p-6 shadow-[12px_12px_0_#00e5ff]">
+   718→        <h2 className="font-bebas text-4xl text-[#00e5ff] mb-4 flex items-center gap-2"><Newspaper className="w-8 h-8" /> PUBLISH NEWS</h2>
+   719→        <div className="space-y-3">
+   720→          <input value={title} onChange={(e) => setTitle(e.target.value.slice(0, 80))} placeholder="TITLE *" className="block w-full px-3 py-2 border-2 border-[#00e5ff] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" />
+   721→          <textarea value={body} onChange={(e) => setBody(e.target.value.slice(0, 500))} placeholder="BODY * (max 500)" rows={3} className="block w-full px-3 py-2 border-2 border-[#00e5ff] bg-[#1a1a1a] text-white font-mono-ud text-sm resize-none focus:outline-none focus:border-[#ff00ff]" />
+   722→          <div className="grid grid-cols-2 gap-3">
+   723→            <select value={category} onChange={(e) => setCategory(e.target.value)} className="px-3 py-2 border-2 border-[#00e5ff] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]">{CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}</select>
+   724→            <input value={author} onChange={(e) => setAuthor(e.target.value.slice(0, 30))} placeholder="AUTHOR" className="px-3 py-2 border-2 border-[#00e5ff] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" />
+   725→          </div>
+   726→          {error && <div className="bg-[#ff4d4d] text-white px-3 py-2 border-2 border-white font-mono-ud text-xs font-bold">! {error}</div>}
+   727→          {success && <div className="bg-[#00ff00] text-black px-3 py-2 border-2 border-black font-mono-ud text-xs font-bold">{success}</div>}
+   728→          <button onClick={handleCreate} className="w-full bg-[#00e5ff] text-black font-bebas text-2xl py-3 border-2 border-[#00e5ff] hover:bg-transparent hover:text-[#00e5ff] transition-colors no-color-transition"><Newspaper className="w-5 h-5 inline mr-2" /> PUBLISH</button>
+   729→        </div>
+   730→      </div>
+   731→      <div className="border-4 border-[#ff00ff] bg-[#1a1a1a] p-4 shadow-[8px_8px_0_#ff00ff]">
+   732→        <div className="flex items-center justify-between mb-3">
+   733→          <h3 className="font-bebas text-2xl text-[#ff00ff] flex items-center gap-2"><Newspaper className="w-5 h-5" /> ARTICLES ({articles.length})</h3>
+   734→          <button onClick={() => { play("click"); refetch(); }} className="font-mono-ud text-xs font-black bg-[#ff00ff] text-black px-3 py-1 border-2 border-[#ff00ff] hover:bg-transparent hover:text-[#ff00ff] transition-colors no-color-transition">↻ REFRESH</button>
+   735→        </div>
+   736→        <div className="space-y-2 max-h-[500px] overflow-y-auto">
+   737→          {articles.length === 0 && <div className="text-center py-8 font-mono-ud text-xs text-white/40">No articles yet.</div>}
+   738→          {articles.map((a) => (
+   739→            <div key={a.id} className="border-2 border-[#ff00ff]/30 p-3 bg-black/50">
+   740→              <div className="flex items-start justify-between gap-2">
+   741→                <div className="flex-1 min-w-0">
+   742→                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+   743→                    <span className="font-mono-ud text-[9px] font-black px-1.5 py-0.5 border" style={{ color: CAT_COLORS[a.category] || "#fff", borderColor: CAT_COLORS[a.category] || "#fff" }}>{a.category}</span>
+   744→                    {a.pinned && <span className="font-mono-ud text-[9px] text-[#d4ff00]">📌 PINNED</span>}
+   745→                    <span className="font-mono-ud text-[9px] text-white/40">{a.author}</span>
+   746→                  </div>
+   747→                  <div className="font-bebas text-lg text-white truncate">{a.title}</div>
+   748→                  <div className="font-mono-ud text-[10px] text-white/50 line-clamp-2">{a.body}</div>
+   749→                </div>
+   750→                <div className="flex flex-col gap-2">
+   751→                  <button onClick={() => togglePin(a)} className="p-2.5 border-2 border-white/30 hover:border-[#d4ff00] hover:bg-[#d4ff00]/10 transition-colors no-color-transition min-w-[44px] min-h-[44px] flex items-center justify-center" title={a.pinned ? "Unpin" : "Pin"}>{a.pinned ? <PinOff className="w-5 h-5 text-[#d4ff00]" /> : <Pin className="w-5 h-5 text-white/60" />}</button>
+   752→                  <button onClick={() => handleDelete(a.id, a.title)} disabled={deletingId === a.id} className="p-2.5 border-2 border-white/30 hover:border-[#ff4d4d] hover:bg-[#ff4d4d]/10 transition-colors no-color-transition disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center" title="Delete">{deletingId === a.id ? <Loader2 className="w-5 h-5 animate-spin text-[#ff4d4d]" /> : <Trash2 className="w-5 h-5 text-[#ff4d4d]" />}</button>
+   753→                </div>
+   754→              </div>
+   755→            </div>
+   756→          ))}
+   757→        </div>
+   758→      </div>
+   759→    </div>
+   760→  );
+   761→}
+   762→
+   763→// ═══════════════════════════════════════════════════════════════════════════
+   764→// GUESTBOOK TAB — Create + delete
+   765→// ═══════════════════════════════════════════════════════════════════════════
+   766→function GuestbookTab() {
+   767→  const { data, refetch } = useFetch<{ entries: { id: string; name: string; message: string; color: string; createdAt: string }[]; count: number }>("/api/guestbook");
+   768→  const { chaosFetch } = useChaosFetch();
+   769→  const [name, setName] = useState("");
+   770→  const [message, setMessage] = useState("");
+   771→  const [error, setError] = useState<string | null>(null);
+   772→  const [success, setSuccess] = useState<string | null>(null);
+   773→  const [deletingId, setDeletingId] = useState<string | null>(null);
+   774→  const { play } = useSfx();
+   775→  const entries = data?.entries ?? [];
+   776→
+   777→  const handleCreate = async () => {
+   778→    if (!name.trim() || !message.trim()) { setError("Nama dan pesan wajib diisi."); return; }
+   779→    setError(null);
+   780→    try {
+   781→      const res = await chaosFetch("/api/guestbook", { method: "POST", body: JSON.stringify({ name, message }) });
+   782→      const d = await res.json(); if (!res.ok) throw new Error(d.error);
+   783→      setSuccess(`✓ Pesan dari ${d.name} ditambahkan!`); setName(""); setMessage(""); refetch(); play("submit");
+   784→      setTimeout(() => setSuccess(null), 4000);
+   785→    } catch (e) { setError(e instanceof Error ? e.message : "Gagal"); }
+   786→  };
+   787→
+   788→  const handleDelete = async (id: string, name: string) => {
+   789→    if (!confirm(`Hapus pesan dari "${name}"?`)) return;
+   790→    setDeletingId(id);
+   791→    try { const res = await chaosFetch(`/api/guestbook?id=${id}`, { method: "DELETE" }); if (!res.ok) throw new Error("Gagal"); setSuccess("✓ Dihapus."); refetch(); play("close"); setTimeout(() => setSuccess(null), 3000); }
+   792→    catch (e) { setError(e instanceof Error ? e.message : "Gagal"); } finally { setDeletingId(null); }
+   793→  };
+   794→
+   795→  return (
+   796→    <div className="space-y-4">
+   797→      <div className="border-8 border-[#d4ff00] bg-black p-6 shadow-[12px_12px_0_#d4ff00]">
+   798→        <h2 className="font-bebas text-4xl text-[#d4ff00] mb-4 flex items-center gap-2"><MessageSquare className="w-8 h-8" /> ADD GUESTBOOK</h2>
+   799→        <div className="space-y-3">
+   800→          <input value={name} onChange={(e) => setName(e.target.value.slice(0, 40))} placeholder="NAME *" className="block w-full px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" />
+   801→          <textarea value={message} onChange={(e) => setMessage(e.target.value.slice(0, 280))} placeholder="MESSAGE * (max 280)" rows={3} className="block w-full px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm resize-none focus:outline-none focus:border-[#ff00ff]" />
+   802→          {error && <div className="bg-[#ff4d4d] text-white px-3 py-2 border-2 border-white font-mono-ud text-xs font-bold">! {error}</div>}
+   803→          {success && <div className="bg-[#00ff00] text-black px-3 py-2 border-2 border-black font-mono-ud text-xs font-bold">{success}</div>}
+   804→          <button onClick={handleCreate} className="w-full bg-[#d4ff00] text-black font-bebas text-2xl py-3 border-2 border-[#d4ff00] hover:bg-transparent hover:text-[#d4ff00] transition-colors no-color-transition"><MessageSquare className="w-5 h-5 inline mr-2" /> POST</button>
+   805→        </div>
+   806→      </div>
+   807→      <div className="border-4 border-[#00e5ff] bg-[#1a1a1a] p-4 shadow-[8px_8px_0_#00e5ff]">
+   808→        <div className="flex items-center justify-between mb-3">
+   809→          <h3 className="font-bebas text-2xl text-[#00e5ff] flex items-center gap-2"><MessageSquare className="w-5 h-5" /> ENTRIES ({entries.length})</h3>
+   810→          <button onClick={() => { play("click"); refetch(); }} className="font-mono-ud text-xs font-black bg-[#00e5ff] text-black px-3 py-1 border-2 border-[#00e5ff] hover:bg-transparent hover:text-[#00e5ff] transition-colors no-color-transition">↻ REFRESH</button>
+   811→        </div>
+   812→        <div className="space-y-2 max-h-[500px] overflow-y-auto">
+   813→          {entries.length === 0 && <div className="text-center py-8 font-mono-ud text-xs text-white/40">No entries.</div>}
+   814→          {entries.map((e) => (
+   815→            <div key={e.id} className="border-2 border-[#00e5ff]/30 p-3 bg-black/50 flex items-start justify-between gap-2">
+   816→              <div className="flex-1 min-w-0">
+   817→                <div className="flex items-center gap-2 mb-1"><span className="w-3 h-3 flex-shrink-0" style={{ backgroundColor: e.color }} /><span className="font-bebas text-lg text-white">{e.name}</span><span className="font-mono-ud text-[9px] text-white/40">{new Date(e.createdAt).toLocaleDateString("id-ID")}</span></div>
+   818→                <div className="font-mono-ud text-xs text-white/70">{e.message}</div>
+   819→              </div>
+   820→              <button onClick={() => handleDelete(e.id, e.name)} disabled={deletingId === e.id} className="p-2.5 border-2 border-white/30 hover:border-[#ff4d4d] hover:bg-[#ff4d4d]/10 transition-colors no-color-transition disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0" title="Delete">{deletingId === e.id ? <Loader2 className="w-5 h-5 animate-spin text-[#ff4d4d]" /> : <Trash2 className="w-5 h-5 text-[#ff4d4d]" />}</button>
+   821→            </div>
+   822→          ))}
+   823→        </div>
+   824→      </div>
+   825→    </div>
+   826→  );
+   827→}
+   828→
+   829→// ═══════════════════════════════════════════════════════════════════════════
+   830→// PORTFOLIO TAB — Full project CRUD
+   831→// ═══════════════════════════════════════════════════════════════════════════
+   832→function PortfolioTab() {
+   833→  const { data, refetch } = useFetch<{ projects: { id: string; title: string; description: string; tech: string[]; category: string; status: string; year: string; memberId: string; link: string | null; repo: string | null; color: string }[]; count: number }>("/api/portfolio");
+   834→  const { chaosFetch } = useChaosFetch();
+   835→  const { play } = useSfx();
+   836→  const [title, setTitle] = useState("");
+   837→  const [description, setDescription] = useState("");
+   838→  const [tech, setTech] = useState("");
+   839→  const [category, setCategory] = useState("WEB");
+   840→  const [status, setStatus] = useState("WIP");
+   841→  const [year, setYear] = useState(String(new Date().getFullYear()));
+   842→  const [memberId, setMemberId] = useState("aldi");
+   843→  const [link, setLink] = useState("");
+   844→  const [repo, setRepo] = useState("");
+   845→  const [color, setColor] = useState("#ff4d4d");
+   846→  const [error, setError] = useState<string | null>(null);
+   847→  const [success, setSuccess] = useState<string | null>(null);
+   848→  const [deletingId, setDeletingId] = useState<string | null>(null);
+   849→  const projects = data?.projects ?? [];
+   850→
+   851→  const handleCreate = async () => {
+   852→    if (!title.trim() || !description.trim()) { setError("Title dan description wajib diisi."); return; }
+   853→    setError(null);
+   854→    try {
+   855→      const res = await chaosFetch("/api/portfolio", { method: "POST", body: JSON.stringify({ title, description, tech: tech.split(",").map((t) => t.trim()).filter(Boolean), category, status, year, memberId, link: link || null, repo: repo || null, color }) });
+   856→      const d = await res.json(); if (!res.ok) throw new Error(d.error);
+   857→      setSuccess(`✓ Project dibuat!`); setTitle(""); setDescription(""); setTech(""); setLink(""); setRepo(""); refetch(); play("submit");
+   858→      setTimeout(() => setSuccess(null), 4000);
+   859→    } catch (e) { setError(e instanceof Error ? e.message : "Gagal"); }
+   860→  };
+   861→
+   862→  const handleDelete = async (id: string, title: string) => {
+   863→    if (!confirm(`Hapus "${title}"?`)) return;
+   864→    setDeletingId(id);
+   865→    try { const res = await chaosFetch(`/api/portfolio?id=${id}`, { method: "DELETE" }); if (!res.ok) throw new Error("Gagal"); setSuccess("✓ Dihapus."); refetch(); play("close"); setTimeout(() => setSuccess(null), 3000); }
+   866→    catch (e) { setError(e instanceof Error ? e.message : "Gagal"); } finally { setDeletingId(null); }
+   867→  };
+   868→
+   869→  const isDbProject = (id: string) => !id.startsWith("p") || id.length > 3;
+   870→  const CAT_COLORS: Record<string, string> = { WEB: "#00e5ff", GAME: "#ff4d4d", MOBILE: "#ff00ff", TOOL: "#d4ff00", BOT: "#8a2be2", OTHER: "#ff8c00" };
+   871→
+   872→  return (
+   873→    <div className="space-y-4">
+   874→      <div className="border-8 border-[#8a2be2] bg-black p-6 shadow-[12px_12px_0_#8a2be2]">
+   875→        <h2 className="font-bebas text-4xl text-[#8a2be2] mb-4 flex items-center gap-2"><FolderOpen className="w-8 h-8" /> ADD PROJECT</h2>
+   876→        <div className="space-y-3">
+   877→          <input value={title} onChange={(e) => setTitle(e.target.value.slice(0, 80))} placeholder="TITLE *" className="block w-full px-3 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" />
+   878→          <textarea value={description} onChange={(e) => setDescription(e.target.value.slice(0, 500))} placeholder="DESCRIPTION * (max 500)" rows={3} className="block w-full px-3 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-sm resize-none focus:outline-none focus:border-[#ff00ff]" />
+   879→          <input value={tech} onChange={(e) => setTech(e.target.value)} placeholder="TECH (comma: Next.js, TypeScript)" className="block w-full px-3 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" />
+   880→          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+   881→            <select value={category} onChange={(e) => setCategory(e.target.value)} className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]">{PORTFOLIO_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}</select>
+   882→            <select value={status} onChange={(e) => setStatus(e.target.value)} className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]">{PORTFOLIO_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select>
+   883→            <input value={year} onChange={(e) => setYear(e.target.value)} placeholder="YEAR" className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+   884→            <select value={memberId} onChange={(e) => setMemberId(e.target.value)} className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]">{MEMBER_SLUGS.map((m) => <option key={m} value={m}>{m.toUpperCase()}</option>)}</select>
+   885→          </div>
+   886→          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+   887→            <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="Live demo URL" className="px-3 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+   888→            <input value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="GitHub URL" className="px-3 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+   889→          </div>
+   890→          <div className="flex items-center gap-2"><span className="font-mono-ud text-xs text-[#d4ff00]">COLOR:</span><input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-10 h-8 border-2 border-[#8a2be2] bg-transparent cursor-pointer" /></div>
+   891→          {error && <div className="bg-[#ff4d4d] text-white px-3 py-2 border-2 border-white font-mono-ud text-xs font-bold">! {error}</div>}
+   892→          {success && <div className="bg-[#00ff00] text-black px-3 py-2 border-2 border-black font-mono-ud text-xs font-bold">{success}</div>}
+   893→          <button onClick={handleCreate} className="w-full bg-[#8a2be2] text-white font-bebas text-2xl py-3 border-2 border-[#8a2be2] hover:bg-transparent hover:text-[#8a2be2] transition-colors no-color-transition"><FolderOpen className="w-5 h-5 inline mr-2" /> + ADD</button>
+   894→        </div>
+   895→      </div>
+   896→      <div className="border-4 border-[#00e5ff] bg-[#1a1a1a] p-4 shadow-[8px_8px_0_#00e5ff]">
+   897→        <div className="flex items-center justify-between mb-3">
+   898→          <h3 className="font-bebas text-2xl text-[#00e5ff] flex items-center gap-2"><FolderOpen className="w-5 h-5" /> PROJECTS ({projects.length})</h3>
+   899→          <button onClick={() => { play("click"); refetch(); }} className="font-mono-ud text-xs font-black bg-[#00e5ff] text-black px-3 py-1 border-2 border-[#00e5ff] hover:bg-transparent hover:text-[#00e5ff] transition-colors no-color-transition">↻</button>
+   900→        </div>
+   901→        <div className="space-y-2 max-h-[500px] overflow-y-auto">
+   902→          {projects.map((p) => (
+   903→            <div key={p.id} className="border-2 border-[#00e5ff]/30 p-3 bg-black/50 flex items-start justify-between gap-2">
+   904→              <div className="flex-1 min-w-0">
+   905→                <div className="flex items-center gap-2 mb-1 flex-wrap">
+   906→                  <span className="font-mono-ud text-[9px] font-black px-1.5 py-0.5 border" style={{ color: CAT_COLORS[p.category] || "#fff", borderColor: CAT_COLORS[p.category] || "#fff" }}>{p.category}</span>
+   907→                  <span className="font-mono-ud text-[9px] font-black px-1.5 py-0.5 border border-white/30" style={{ color: p.status === "LIVE" ? "#00ff00" : p.status === "WIP" ? "#ff8c00" : "#666" }}>{p.status}</span>
+   908→                  <span className="font-mono-ud text-[9px] text-white/40">{p.year} · {(p.memberId || "").toUpperCase()}</span>
+   909→                </div>
+   910→                <div className="font-bebas text-lg text-white truncate">{p.title}</div>
+   911→                <div className="font-mono-ud text-[10px] text-white/50 line-clamp-2">{p.description}</div>
+   912→                {p.tech?.length > 0 && <div className="font-mono-ud text-[9px] text-[#00e5ff]/60 mt-1 truncate">{p.tech.join(" · ")}</div>}
+   913→              </div>
+   914→              {isDbProject(p.id) ? (
+   915→                <button onClick={() => handleDelete(p.id, p.title)} disabled={deletingId === p.id} className="p-2.5 border-2 border-white/30 hover:border-[#ff4d4d] hover:bg-[#ff4d4d]/10 transition-colors no-color-transition disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0" title="Delete">{deletingId === p.id ? <Loader2 className="w-5 h-5 animate-spin text-[#ff4d4d]" /> : <Trash2 className="w-5 h-5 text-[#ff4d4d]" />}</button>
+   916→              ) : (<div className="bg-black/70 text-white/60 px-2 py-1 font-mono-ud text-[9px] font-bold border border-white/30 flex-shrink-0">SEED</div>)}
+   917→            </div>
+   918→          ))}
+   919→        </div>
+   920→      </div>
+   921→    </div>
+   922→  );
+   923→}
+   924→
+   925→// ═══════════════════════════════════════════════════════════════════════════
+   926→// ACHIEVEMENTS TAB — Full CRUD
+   927→// ═══════════════════════════════════════════════════════════════════════════
+   928→function AchievementsTab() {
+   929→  const { data, refetch } = useFetch<{ achievements: { id: string; memberId: string; title: string; year: string; description: string; images: { id: string; img: string }[] }[]; count: number }>("/api/achievements");
+   930→  const { chaosFetch } = useChaosFetch();
+   931→  const { play } = useSfx();
+   932→  const [title, setTitle] = useState("");
+   933→  const [year, setYear] = useState(String(new Date().getFullYear()));
+   934→  const [description, setDescription] = useState("");
+   935→  const [memberId, setMemberId] = useState("aldi");
+   936→  const [error, setError] = useState<string | null>(null);
+   937→  const [success, setSuccess] = useState<string | null>(null);
+   938→  const [deletingId, setDeletingId] = useState<string | null>(null);
+   939→  const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+   940→  const [expandedId, setExpandedId] = useState<string | null>(null);
+   941→  const achievements = data?.achievements ?? [];
+   942→
+   943→  const handleCreate = async () => {
+   944→    if (!title.trim() || !description.trim()) { setError("Title dan description wajib diisi."); return; }
+   945→    setError(null);
+   946→    try {
+   947→      const res = await chaosFetch("/api/achievements", { method: "POST", body: JSON.stringify({ title, year, description, memberId }) });
+   948→      const d = await res.json(); if (!res.ok) throw new Error(d.error);
+   949→      setSuccess(`✓ Achievement dibuat!`); setTitle(""); setDescription(""); refetch(); play("submit");
+   950→      setTimeout(() => setSuccess(null), 4000);
+   951→    } catch (e) { setError(e instanceof Error ? e.message : "Gagal"); }
+   952→  };
+   953→
+   954→  const handleDelete = async (id: string, title: string) => {
+   955→    if (!confirm(`Hapus "${title}"? Semua foto juga akan dihapus.`)) return;
+   956→    setDeletingId(id);
+   957→    try { const res = await chaosFetch(`/api/achievements?id=${id}`, { method: "DELETE" }); if (!res.ok) throw new Error("Gagal"); setSuccess("✓ Dihapus."); refetch(); play("close"); setTimeout(() => setSuccess(null), 3000); }
+   958→    catch (e) { setError(e instanceof Error ? e.message : "Gagal"); } finally { setDeletingId(null); }
+   959→  };
+   960→
+   961→  const handleUploadImage = async (achievementId: string, file: File) => {
+   962→    setUploadingFor(achievementId);
+   963→    try {
+   964→      const form = new FormData();
+   965→      form.append("file", file);
+   966→      form.append("achievementId", achievementId);
+   967→      const res = await chaosFetch("/api/achievements/upload", { method: "POST", body: form });
+   968→      const d = await res.json();
+   969→      if (!res.ok) throw new Error(d.error || "Upload gagal");
+   970→      setSuccess(`✓ Foto uploaded!`); refetch(); play("submit");
+   971→      setTimeout(() => setSuccess(null), 3000);
+   972→    } catch (e) { setError(e instanceof Error ? e.message : "Upload gagal"); }
+   973→    finally { setUploadingFor(null); }
+   974→  };
+   975→
+   976→  const handleDeleteImage = async (imageId: string) => {
+   977→    if (!confirm("Hapus foto ini?")) return;
+   978→    try {
+   979→      const res = await chaosFetch(`/api/achievements/upload?id=${imageId}`, { method: "DELETE" });
+   980→      if (!res.ok) throw new Error("Gagal");
+   981→      setSuccess("✓ Foto dihapus."); refetch(); play("close");
+   982→      setTimeout(() => setSuccess(null), 3000);
+   983→    } catch (e) { setError(e instanceof Error ? e.message : "Gagal"); }
+   984→  };
+   985→
+   986→  return (
+   987→    <div className="space-y-4 mt-4">
+   988→      <div className="border-8 border-[#d4ff00] bg-black p-6 shadow-[12px_12px_0_#d4ff00]">
+   989→        <h2 className="font-bebas text-4xl text-[#d4ff00] mb-4 flex items-center gap-2"><Award className="w-8 h-8" /> ADD ACHIEVEMENT</h2>
+   990→        <div className="space-y-3">
+   991→          <input value={title} onChange={(e) => setTitle(e.target.value.slice(0, 100))} placeholder="TITLE *" className="block w-full px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" />
+   992→          <textarea value={description} onChange={(e) => setDescription(e.target.value.slice(0, 500))} placeholder="DESCRIPTION * (max 500)" rows={3} className="block w-full px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm resize-none focus:outline-none focus:border-[#ff00ff]" />
+   993→          <div className="grid grid-cols-2 gap-2">
+   994→            <input value={year} onChange={(e) => setYear(e.target.value)} placeholder="YEAR" className="px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" />
+   995→            <select value={memberId} onChange={(e) => setMemberId(e.target.value)} className="px-3 py-2 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]">{MEMBER_SLUGS.map((m) => <option key={m} value={m}>{m.toUpperCase()}</option>)}</select>
+   996→          </div>
+   997→          {error && <div className="bg-[#ff4d4d] text-white px-3 py-2 border-2 border-white font-mono-ud text-xs font-bold">! {error}</div>}
+   998→          {success && <div className="bg-[#00ff00] text-black px-3 py-2 border-2 border-black font-mono-ud text-xs font-bold">{success}</div>}
+   999→          <button onClick={handleCreate} className="w-full bg-[#d4ff00] text-black font-bebas text-2xl py-3 border-2 border-[#d4ff00] hover:bg-transparent hover:text-[#d4ff00] transition-colors no-color-transition"><Award className="w-5 h-5 inline mr-2" /> + ADD</button>
+  1000→          <p className="font-mono-ud text-[10px] text-white/50 text-center tracking-wider">
+  1001→            ▸ Setelah dibuat, klik tombol <span className="text-[#d4ff00] font-bold">+ ADD PHOTO</span> di kartu achievement untuk upload sertifikat/medali (opsional).
+  1002→          </p>
+  1003→        </div>
+  1004→      </div>
+  1005→      <div className="border-4 border-[#00e5ff] bg-[#1a1a1a] p-4 shadow-[8px_8px_0_#00e5ff]">
+  1006→        <div className="flex items-center justify-between mb-3">
+  1007→          <h3 className="font-bebas text-2xl text-[#00e5ff] flex items-center gap-2"><Award className="w-5 h-5" /> ACHIEVEMENTS ({achievements.length})</h3>
+  1008→          <button onClick={() => { play("click"); refetch(); }} className="font-mono-ud text-xs font-black bg-[#00e5ff] text-black px-3 py-1 border-2 border-[#00e5ff] hover:bg-transparent hover:text-[#00e5ff] transition-colors no-color-transition">↻</button>
+  1009→        </div>
+  1010→        <div className="space-y-2 max-h-[600px] overflow-y-auto">
+  1011→          {achievements.length === 0 && <div className="text-center py-8 font-mono-ud text-xs text-white/40">No achievements yet.</div>}
+  1012→          {achievements.map((a) => {
+  1013→            const imgCount = a.images?.length ?? 0;
+  1014→            const isExpanded = expandedId === a.id;
+  1015→            return (
+  1016→              <div key={a.id} className="border-2 border-[#00e5ff]/30 p-3 bg-black/50">
+  1017→                <div className="flex items-start justify-between gap-2">
+  1018→                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : a.id)}>
+  1019→                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+  1020→                      <span className="font-mono-ud text-[9px] text-[#d4ff00]">{a.year}</span>
+  1021→                      <span className="font-mono-ud text-[9px] text-white/40">{a.memberId.toUpperCase()}</span>
+  1022→                      {imgCount > 0 ? (
+  1023→                        <span className="font-mono-ud text-[9px] text-[#00e5ff] bg-[#00e5ff]/10 px-1.5 py-0.5 border border-[#00e5ff]/30">📷 {imgCount} PHOTO{imgCount > 1 ? "S" : ""}</span>
+  1024→                      ) : (
+  1025→                        <span className="font-mono-ud text-[9px] text-[#ff8c00] bg-[#ff8c00]/10 px-1.5 py-0.5 border border-[#ff8c00]/30 animate-pulse">📷 NO PHOTOS — ADD BELOW</span>
+  1026→                      )}
+  1027→                      <span className="font-mono-ud text-[9px] text-white/30">{isExpanded ? "▼ COLLAPSE" : "▶ EXPAND"}</span>
+  1028→                    </div>
+  1029→                    <div className="font-bebas text-lg text-white truncate">{a.title}</div>
+  1030→                    <div className="font-mono-ud text-[10px] text-white/50 line-clamp-2">{a.description}</div>
+  1031→                  </div>
+  1032→                  <button onClick={() => handleDelete(a.id, a.title)} disabled={deletingId === a.id} className="p-2.5 border-2 border-white/30 hover:border-[#ff4d4d] hover:bg-[#ff4d4d]/10 transition-colors no-color-transition disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0" title="Delete achievement">{deletingId === a.id ? <Loader2 className="w-5 h-5 animate-spin text-[#ff4d4d]" /> : <Trash2 className="w-5 h-5 text-[#ff4d4d]" />}</button>
+  1033→                </div>
+  1034→
+  1035→                {/* PROMINENT UPLOAD BUTTON — always visible (no expand required) */}
+  1036→                <label
+  1037→                  className={cn(
+  1038→                    "mt-3 flex items-center justify-center gap-2 border-2 border-dashed py-2.5 px-3 font-mono-ud text-xs font-bold tracking-wider cursor-pointer transition-colors no-color-transition min-h-[44px]",
+  1039→                    uploadingFor === a.id
+  1040→                      ? "border-[#d4ff00] bg-[#d4ff00]/10 text-[#d4ff00] cursor-wait"
+  1041→                      : "border-[#d4ff00] bg-[#d4ff00]/5 text-[#d4ff00] hover:bg-[#d4ff00] hover:text-black",
+  1042→                  )}
+  1043→                  title="Upload foto sertifikat, medali, dll (opsional, max 4MB)"
+  1044→                >
+  1045→                  <Upload className="w-4 h-4" />
+  1046→                  {uploadingFor === a.id ? (
+  1047→                    <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> UPLOADING…</span>
+  1048→                  ) : (
+  1049→                    <span>+ ADD PHOTO {imgCount > 0 && `({imgCount} uploaded)`}</span>
+  1050→                  )}
+  1051→                  <input
+  1052→                    type="file"
+  1053→                    accept="image/*"
+  1054→                    onChange={(e) => {
+  1055→                      const f = e.target.files?.[0];
+  1056→                      if (f) handleUploadImage(a.id, f);
+  1057→                      // Reset so the same file can be re-selected later
+  1058→                      e.target.value = "";
+  1059→                    }}
+  1060→                    disabled={uploadingFor === a.id}
+  1061→                    className="sr-only"
+  1062→                  />
+  1063→                </label>
+  1064→
+  1065→                {/* Expanded: image gallery (delete per photo) */}
+  1066→                {isExpanded && (
+  1067→                  <div className="mt-3 pt-3 border-t-2 border-[#00e5ff]/20 space-y-3">
+  1068→                    {imgCount > 0 ? (
+  1069→                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+  1070→                        {a.images.map((img, i) => (
+  1071→                          <div key={img.id} className="relative group border-2 border-[#00e5ff]/30 overflow-hidden">
+  1072→                            <img src={img.img} alt={`${a.title} ${i + 1}`} className="w-full aspect-square object-cover" loading="lazy" />
+  1073→                            <button
+  1074→                              onClick={() => handleDeleteImage(img.id)}
+  1075→                              className="absolute top-1 right-1 bg-[#ff4d4d] text-white p-1.5 border border-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[#ff0000] min-w-[24px] min-h-[24px] flex items-center justify-center"
+  1076→                              title="Delete photo"
+  1077→                              aria-label={`Delete photo ${i + 1}`}
+  1078→                            >
+  1079→                              <Trash2 className="w-3 h-3" />
+  1080→                            </button>
+  1081→                          </div>
+  1082→                        ))}
+  1083→                      </div>
+  1084→                    ) : (
+  1085→                      <div className="font-mono-ud text-[10px] text-white/30 text-center py-2">
+  1086→                        Belum ada foto. Klik tombol <span className="text-[#d4ff00] font-bold">+ ADD PHOTO</span> di atas untuk upload sertifikat/medali.
+  1087→                      </div>
+  1088→                    )}
+  1089→                    <p className="font-mono-ud text-[9px] text-white/40 tracking-wider">
+  1090→                      ▸ Tip: hover foto lalu klik <Trash2 className="w-2.5 h-2.5 inline" /> untuk hapus. Foto disimpan di Supabase Storage.
+  1091→                    </p>
+  1092→                  </div>
+  1093→                )}
+  1094→              </div>
+  1095→            );
+  1096→          })}
+  1097→        </div>
+  1098→      </div>
+  1099→    </div>
+  1100→  );
+  1101→}
+  1102→
+  1103→// ═══════════════════════════════════════════════════════════════════════════
+  1104→// GAMES TAB — game-specific: metadata + players/photos (all, supports external
+  1105→//              players with own photo) + moments (all) + DnD characters/campaigns
+  1106→//              (dnd only) + compatibility (all)
+  1107→// ═══════════════════════════════════════════════════════════════════════════
+  1108→function GamesTab() {
+  1109→  const { data: gamesData, refetch: refetchGames } = useFetch<{ games: { id: string; title: string; subtitle: string; description: string; accent: string; carouselTitle: string; bg: string; reverse: boolean }[] }>("/api/games");
+  1110→  const { data: compatData, refetch: refetchCompat } = useFetch<{ compat: { id: string; memberId: string; gameId: string; level: number }[] }>("/api/games/compatibility");
+  1111→  const { data: dndData, refetch: refetchDnd } = useFetch<{ characters: { id: string; memberId: string; characterName: string; race: string; charClass: string; level: number; img: string | null; str: number; dex: number; con: number; int: number; wis: number; cha: number }[] }>("/api/games/dnd-characters");
+  1112→  const { data: dndCampaignData, refetch: refetchDndCampaigns } = useFetch<{ campaigns: { id: string; name: string; dm: string; status: string; description: string; sessions: number; storyOutline: string | null }[] }>("/api/games/dnd-campaigns");
+  1113→  const { chaosFetch } = useChaosFetch();
+  1114→  const { play } = useSfx();
+  1115→  const [selectedGame, setSelectedGame] = useState("ml");
+  1116→  const [error, setError] = useState<string | null>(null);
+  1117→  const [success, setSuccess] = useState<string | null>(null);
+  1118→
+  1119→  // Moment (photo) upload state
+  1120→  const [momentFile, setMomentFile] = useState<File | null>(null);
+  1121→  const [momentTitle, setMomentTitle] = useState("");
+  1122→  const [momentDesc, setMomentDesc] = useState("");
+  1123→  const [uploadingMoment, setUploadingMoment] = useState(false);
+  1124→
+  1125→  // Player create state (supports external players with own photo)
+  1126→  const [pName, setPName] = useState("");
+  1127→  const [pNick, setPNick] = useState("");
+  1128→  const [pColor, setPColor] = useState("#ff8c00");
+  1129→  const [pImg, setPImg] = useState<File | null>(null);
+  1130→  const [pImgUrl, setPImgUrl] = useState("");
+  1131→  const [pIsMember, setPIsMember] = useState(false);
+  1132→  const [pMemberSlug, setPMemberSlug] = useState("razka");
+  1133→  const [uploadingPlayerPhoto, setUploadingPlayerPhoto] = useState(false);
+  1134→  // ML-specific fields
+  1135→  const [pRole, setPRole] = useState("");
+  1136→  const [pFavHero, setPFavHero] = useState("");
+  1137→  const [pRank, setPRank] = useState("");
+  1138→  const [pKda, setPKda] = useState("");
+  1139→  const [pWinRate, setPWinRate] = useState("");
+  1140→  // DnD-specific fields
+  1141→  const [pDndChar, setPDndChar] = useState("");
+  1142→  const [pDndRace, setPDndRace] = useState("Human");
+  1143→  const [pDndClass, setPDndClass] = useState("Fighter");
+  1144→  const [pDndLevel, setPDndLevel] = useState("1");
+  1145→
+  1146→  // DnD character create state (the full character sheet with ability scores)
+  1147→  const [dndMember, setDndMember] = useState("razka");
+  1148→  const [dndName, setDndName] = useState("");
+  1149→  const [dndRace, setDndRace] = useState("Human");
+  1150→  const [dndClass, setDndClass] = useState("Fighter");
+  1151→  const [dndLevel, setDndLevel] = useState("1");
+  1152→
+  1153→  // DnD campaign create state
+  1154→  const [campName, setCampName] = useState("");
+  1155→  const [campDm, setCampDm] = useState("");
+  1156→  const [campStatus, setCampStatus] = useState("ONGOING");
+  1157→  const [campDesc, setCampDesc] = useState("");
+  1158→  const [campSessions, setCampSessions] = useState("0");
+  1159→
+  1160→  // Fetch moments + players for the selected game (URL changes when selectedGame changes)
+  1161→  const momentsUrl = `/api/games/moments?gameId=${selectedGame}`;
+  1162→  const { data: momentsData, refetch: refetchMoments } = useFetch<{ moments: { id: string; title: string; description: string | null; img: string; order: number }[] }>(momentsUrl);
+  1163→  const playersUrl = `/api/games/players?gameId=${selectedGame}`;
+  1164→  const { data: playersData, refetch: refetchPlayers } = useFetch<{ players: { id: string; name: string; nick: string; img: string | null; color: string; role: string | null; favHero: string | null; rank: string | null; kda: string | null; winRate: string | null; dndCharacter: string | null; dndRace: string | null; dndClass: string | null; dndLevel: number; isMember: boolean; memberSlug: string | null; order: number }[] }>(playersUrl);
+  1165→
+  1166→  const games = gamesData?.games ?? [];
+  1167→  const compat = compatData?.compat ?? [];
+  1168→  const dndChars = dndData?.characters ?? [];
+  1169→  const dndCampaigns = dndCampaignData?.campaigns ?? [];
+  1170→  const moments = momentsData?.moments ?? [];
+  1171→  const players = playersData?.players ?? [];
+  1172→
+  1173→  const flash = (msg: string, isErr = false) => {
+  1174→    if (isErr) { setError(msg); setSuccess(null); } else { setSuccess(msg); setError(null); play("submit"); }
+  1175→    setTimeout(() => { setError(null); setSuccess(null); }, 4000);
+  1176→  };
+  1177→
+  1178→  // --- Game metadata PUT ---
+  1179→  const updateGameMeta = async (gameId: string, field: string, value: string) => {
+  1180→    try {
+  1181→      const url = `/api/games/${gameId}`;
+  1182→      const res = await chaosFetch(url, { method: "PUT", body: JSON.stringify({ [field]: value }) });
+  1183→      const d = await res.json(); if (!res.ok) throw new Error(d.error);
+  1184→      refetchGames(); flash(`✓ ${gameId.toUpperCase()} updated.`);
+  1185→    } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
+  1186→  };
+  1187→
+  1188→  // --- Player photo upload (returns URL) ---
+  1189→  const uploadPlayerPhoto = async (): Promise<string | null> => {
+  1190→    if (!pImg) return null;
+  1191→    setUploadingPlayerPhoto(true);
+  1192→    try {
+  1193→      const form = new FormData();
+  1194→      form.append("file", pImg);
+  1195→      const res = await chaosFetch("/api/games/players/upload", { method: "POST", body: form });
+  1196→      const d = await res.json(); if (!res.ok) throw new Error(d.error);
+  1197→      return d.url as string;
+  1198→    } catch (e) { flash(e instanceof Error ? e.message : "Gagal upload foto", true); return null; }
+  1199→    finally { setUploadingPlayerPhoto(false); }
+  1200→  };
+  1201→
+  1202→  // --- Create a player (member OR external, with own photo) ---
+  1203→  const createPlayer = async () => {
+  1204→    if (!pName.trim() || !pNick.trim()) { flash("Name dan nick wajib diisi.", true); return; }
+  1205→    let imgUrl = pImgUrl;
+  1206→    if (pImg) {
+  1207→      const uploaded = await uploadPlayerPhoto();
+  1208→      if (uploaded) imgUrl = uploaded;
+  1209→    }
+  1210→    try {
+  1211→      const payload: Record<string, unknown> = {
+  1212→        gameId: selectedGame,
+  1213→        name: pName, nick: pNick, color: pColor,
+  1214→        img: imgUrl || null,
+  1215→        isMember: pIsMember,
+  1216→        memberSlug: pIsMember ? pMemberSlug : null,
+  1217→      };
+  1218→      if (selectedGame === "ml") {
+  1219→        payload.role = pRole || null;
+  1220→        payload.favHero = pFavHero || null;
+  1221→        payload.rank = pRank || null;
+  1222→        payload.kda = pKda || null;
+  1223→        payload.winRate = pPWinRate ? pWinRate : null;
+  1224→      }
+  1225→      if (selectedGame === "dnd") {
+  1226→        payload.dndCharacter = pDndChar || null;
+  1227→        payload.dndRace = pDndRace;
+  1228→        payload.dndClass = pDndClass;
+  1229→        payload.dndLevel = Number(pDndLevel) || 1;
+  1230→      }
+  1231→      const res = await chaosFetch("/api/games/players", { method: "POST", body: JSON.stringify(payload) });
+  1232→      const d = await res.json(); if (!res.ok) throw new Error(d.error);
+  1233→      // Reset form
+  1234→      setPName(""); setPNick(""); setPColor("#ff8c00"); setPImg(null); setPImgUrl("");
+  1235→      setPRole(""); setPFavHero(""); setPRank(""); setPKda(""); setPWinRate("");
+  1236→      setPDndChar(""); setPDndRace("Human"); setPDndClass("Fighter"); setPDndLevel("1");
+  1237→      refetchPlayers(); flash(`✓ ${pNick} ditambahkan!`);
+  1238→    } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
+  1239→  };
+  1240→
+  1241→  const deletePlayer = async (id: string, nick: string) => {
+  1242→    if (!confirm(`Hapus player "${nick}"?`)) return;
+  1243→    try {
+  1244→      const delUrl = `/api/games/players?id=${id}`;
+  1245→      const res = await chaosFetch(delUrl, { method: "DELETE" });
+  1246→      if (!res.ok) throw new Error("Gagal");
+  1247→      refetchPlayers(); flash(`✓ ${nick} dihapus.`); play("close");
+  1248→    } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
+  1249→  };
+  1250→
+  1251→  // --- Compatibility (member × game level 0-3) ---
+  1252→  const setCompat = async (memberId: string, level: number) => {
+  1253→    try {
+  1254→      const res = await chaosFetch("/api/games/compatibility", { method: "POST", body: JSON.stringify({ memberId, gameId: selectedGame, level }) });
+  1255→      const d = await res.json(); if (!res.ok) throw new Error(d.error);
+  1256→      refetchCompat(); flash(`✓ ${memberId.toUpperCase()} = level ${level}.`);
+  1257→    } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
+  1258→  };
+  1259→
+  1260→  // --- Moment (photo) upload ---
+  1261→  const uploadMoment = async () => {
+  1262→    if (!momentFile) { flash("File wajib diupload.", true); return; }
+  1263→    if (!momentTitle.trim()) { flash("Title wajib diisi.", true); return; }
+  1264→    setUploadingMoment(true);
+  1265→    try {
+  1266→      const form = new FormData();
+  1267→      form.append("file", momentFile);
+  1268→      form.append("gameId", selectedGame);
+  1269→      form.append("title", momentTitle);
+  1270→      form.append("description", momentDesc);
+  1271→      const res = await chaosFetch("/api/games/moments", { method: "POST", body: form });
+  1272→      const d = await res.json(); if (!res.ok) throw new Error(d.error);
+  1273→      const savedTitle = d.moment?.title || "Moment";
+  1274→      setMomentFile(null); setMomentTitle(""); setMomentDesc("");
+  1275→      refetchMoments(); flash(`✓ ${savedTitle} uploaded!`);
+  1276→    } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
+  1277→    finally { setUploadingMoment(false); }
+  1278→  };
+  1279→
+  1280→  const deleteMoment = async (id: string, title: string) => {
+  1281→    if (!confirm(`Hapus moment "${title}"?`)) return;
+  1282→    try {
+  1283→      const delUrl = `/api/games/moments?id=${id}`;
+  1284→      const res = await chaosFetch(delUrl, { method: "DELETE" });
+  1285→      if (!res.ok) throw new Error("Gagal");
+  1286→      refetchMoments(); flash(`✓ Moment dihapus.`); play("close");
+  1287→    } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
+  1288→  };
+  1289→
+  1290→  // --- DnD character create (full character sheet) ---
+  1291→  const createDnd = async () => {
+  1292→    if (!dndName.trim()) { flash("Character name wajib diisi.", true); return; }
+  1293→    try {
+  1294→      const res = await chaosFetch("/api/games/dnd-characters", {
+  1295→        method: "POST",
+  1296→        body: JSON.stringify({ memberId: dndMember, characterName: dndName, race: dndRace, charClass: dndClass, level: Number(dndLevel) }),
+  1297→      });
+  1298→      const d = await res.json(); if (!res.ok) throw new Error(d.error);
+  1299→      setDndName(""); refetchDnd(); flash(`✓ ${dndName} dibuat!`);
+  1300→    } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
+  1301→  };
+  1302→
+  1303→  const deleteDnd = async (id: string, name: string) => {
+  1304→    if (!confirm(`Hapus "${name}"?`)) return;
+  1305→    try {
+  1306→      const delUrl = `/api/games/dnd-characters?id=${id}`;
+  1307→      const res = await chaosFetch(delUrl, { method: "DELETE" });
+  1308→      if (!res.ok) throw new Error("Gagal");
+  1309→      refetchDnd(); flash(`✓ ${name} dihapus.`); play("close");
+  1310→    } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
+  1311→  };
+  1312→
+  1313→  // --- DnD campaign create ---
+  1314→  const createCampaign = async () => {
+  1315→    if (!campName.trim()) { flash("Campaign name wajib diisi.", true); return; }
+  1316→    try {
+  1317→      const res = await chaosFetch("/api/games/dnd-campaigns", {
+  1318→        method: "POST",
+  1319→        body: JSON.stringify({ name: campName, dm: campDm || "Unknown DM", status: campStatus, description: campDesc, sessions: Number(campSessions) || 0 }),
+  1320→      });
+  1321→      const d = await res.json(); if (!res.ok) throw new Error(d.error);
+  1322→      const savedName = campName || "Campaign";
+  1323→      setCampName(""); setCampDesc(""); setCampSessions("0"); refetchDndCampaigns(); flash(`✓ ${savedName} dibuat!`);
+  1324→    } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
+  1325→  };
+  1326→
+  1327→  const deleteCampaign = async (id: string, name: string) => {
+  1328→    if (!confirm(`Hapus campaign "${name}"?`)) return;
+  1329→    try {
+  1330→      const delUrl = `/api/games/dnd-campaigns?id=${id}`;
+  1331→      const res = await chaosFetch(delUrl, { method: "DELETE" });
+  1332→      if (!res.ok) throw new Error("Gagal");
+  1333→      refetchDndCampaigns(); flash(`✓ Campaign dihapus.`); play("close");
+  1334→    } catch (e) { flash(e instanceof Error ? e.message : "Gagal", true); }
+  1335→  };
+  1336→
+  1337→  const selectedGameObj = games.find((g) => g.id === selectedGame);
+  1338→  const gameCompat = compat.filter((c) => c.gameId === selectedGame);
+  1339→  const COMPAT_LABELS = ["—", "RARE", "CASUAL", "MAIN"];
+  1340→
+  1341→  // Section wrapper for consistent styling
+  1342→  const Section = ({ title, color, icon: Icon, children }: { title: string; color: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) => (
+  1343→    <div className="border-8 bg-black p-6" style={{ borderColor: color, boxShadow: `12px 12px 0 ${color}` }}>
+  1344→      <h3 className="font-bebas text-3xl mb-3 flex items-center gap-2" style={{ color }}><Icon className="w-6 h-6" /> {title}</h3>
+  1345→      {children}
+  1346→    </div>
+  1347→  );
+  1348→
+  1349→  const gameLabel = selectedGame.toUpperCase();
+  1350→
+  1351→  return (
+  1352→    <div className="space-y-4">
+  1353→      {/* Game selector */}
+  1354→      <div className="border-8 border-[#00e5ff] bg-black p-6 shadow-[12px_12px_0_#00e5ff]">
+  1355→        <h2 className="font-bebas text-4xl text-[#00e5ff] mb-4 flex items-center gap-2"><Plus className="w-8 h-8" /> GAMES MANAGER</h2>
+  1356→        <div className="font-mono-ud text-xs text-white/60 mb-2">▸ Pilih game. Setiap game punya section berbeda — ML punya player stats (role/hero/KDA/WR), DnD punya characters + campaigns. Semua game punya players (dengan foto sendiri, bisa tambah player eksternal) + moments + compatibility.</div>
+  1357→        <div className="flex flex-wrap gap-2 mb-4">
+  1358→          {games.map((g) => (
+  1359→            <button key={g.id} onClick={() => { play("click"); setSelectedGame(g.id); }}
+  1360→              className={cn("px-4 py-2 border-2 font-bebas text-lg tracking-wider transition-all no-color-transition",
+  1361→                selectedGame === g.id ? "bg-[#00e5ff] text-black border-white" : "bg-transparent text-white/50 border-white/20 hover:text-white hover:border-white/50")}>
+  1362→              {g.title}
+  1363→            </button>
+  1364→          ))}
+  1365→        </div>
+  1366→        {error && <div className="bg-[#ff4d4d] text-white px-3 py-2 border-2 border-white font-mono-ud text-xs font-bold mb-3">! {error}</div>}
+  1367→        {success && <div className="bg-[#d4ff00] text-black px-3 py-2 border-2 border-black font-mono-ud text-xs font-bold mb-3">{success}</div>}
+  1368→      </div>
+  1369→
+  1370→      {/* 1. GAME METADATA (all games) */}
+  1371→      {selectedGameObj && (
+  1372→        <Section title={`GAME METADATA — ${selectedGameObj.title}`} color="#00e5ff" icon={Settings}>
+  1373→          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+  1374→            <label className="block"><span className="font-mono-ud text-[10px] text-white/60">TITLE</span><input defaultValue={selectedGameObj.title} onBlur={(e) => updateGameMeta(selectedGame, "title", e.target.value)} className="block w-full px-2 py-1.5 border-2 border-[#00e5ff] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
+  1375→            <label className="block"><span className="font-mono-ud text-[10px] text-white/60">SUBTITLE</span><input defaultValue={selectedGameObj.subtitle} onBlur={(e) => updateGameMeta(selectedGame, "subtitle", e.target.value)} className="block w-full px-2 py-1.5 border-2 border-[#00e5ff] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
+  1376→          </div>
+  1377→          <label className="block mt-2"><span className="font-mono-ud text-[10px] text-white/60">DESCRIPTION</span><textarea defaultValue={selectedGameObj.description} onBlur={(e) => updateGameMeta(selectedGame, "description", e.target.value)} rows={2} className="block w-full px-2 py-1.5 border-2 border-[#00e5ff] bg-[#1a1a1a] text-white font-mono-ud text-sm resize-none focus:outline-none focus:border-[#ff00ff]" /></label>
+  1378→          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+  1379→            <label className="block"><span className="font-mono-ud text-[10px] text-white/60">ACCENT COLOR</span><input type="color" defaultValue={selectedGameObj.accent} onBlur={(e) => updateGameMeta(selectedGame, "accent", e.target.value)} className="w-full h-8 border-2 border-[#00e5ff] bg-transparent cursor-pointer" /></label>
+  1380→            <label className="block"><span className="font-mono-ud text-[10px] text-white/60">CAROUSEL TITLE</span><input defaultValue={selectedGameObj.carouselTitle} onBlur={(e) => updateGameMeta(selectedGame, "carouselTitle", e.target.value)} className="block w-full px-2 py-1.5 border-2 border-[#00e5ff] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" /></label>
+  1381→          </div>
+  1382→        </Section>
+  1383→      )}
+  1384→
+  1385→      {/* 2. PLAYERS — all games, supports external players with own photo */}
+  1386→      <Section title={`PLAYERS — ${gameLabel}`} color="#ff8c00" icon={Users}>
+  1387→        <div className="font-mono-ud text-xs text-white/60 mb-2">▸ Pemain per game. Bisa member ATAU player eksternal (teman, rival, guest). Setiap player punya foto sendiri (terpisah dari foto profil member).</div>
+  1388→        {/* Create form */}
+  1389→        <div className="space-y-2 border-2 border-[#ff8c00]/30 p-3 mb-3">
+  1390→          <div className="font-mono-ud text-xs text-[#ff8c00] tracking-widest">▸ ADD NEW PLAYER</div>
+  1391→          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+  1392→            <input value={pName} onChange={(e) => setPName(e.target.value.slice(0, 60))} placeholder="NAME * (e.g. Raynaldi)" className="px-2 py-1.5 border-2 border-[#ff8c00] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1393→            <input value={pNick} onChange={(e) => setPNick(e.target.value.slice(0, 30))} placeholder="NICK * (e.g. Aldi)" className="px-2 py-1.5 border-2 border-[#ff8c00] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1394→            <div className="flex items-center gap-2"><span className="font-mono-ud text-[10px] text-white/60">COLOR</span><input type="color" value={pColor} onChange={(e) => setPColor(e.target.value)} className="w-10 h-8 border-2 border-[#ff8c00] bg-transparent cursor-pointer" /></div>
+  1395→          </div>
+  1396→          {/* Photo upload OR URL */}
+  1397→          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+  1398→            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(e) => setPImg(e.target.files?.[0] || null)} className="block w-full text-xs font-mono-ud text-white file:mr-3 file:py-1.5 file:px-3 file:border-2 file:border-[#ff8c00] file:bg-[#ff8c00] file:text-black file:font-bold file:cursor-pointer file:hover:bg-[#ff00ff] file:hover:text-white" />
+  1399→            <input value={pImgUrl} onChange={(e) => setPImgUrl(e.target.value.slice(0, 300))} placeholder="ATAU paste photo URL" className="px-2 py-1.5 border-2 border-[#ff8c00] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1400→          </div>
+  1401→          {/* Is member toggle */}
+  1402→          <div className="flex items-center gap-3">
+  1403→            <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={pIsMember} onChange={(e) => setPIsMember(e.target.checked)} className="w-4 h-4" /><span className="font-mono-ud text-xs text-white/80">INI MEMBER?</span></label>
+  1404→            {pIsMember && (
+  1405→              <select value={pMemberSlug} onChange={(e) => setPMemberSlug(e.target.value)} className="px-2 py-1 border-2 border-[#ff8c00] bg-[#1a1a1a] text-white font-mono-ud text-xs">{MEMBER_SLUGS.map((m) => <option key={m} value={m}>{m.toUpperCase()}</option>)}</select>
+  1406→            )}
+  1407→          </div>
+  1408→          {/* ML-specific fields */}
+  1409→          {selectedGame === "ml" && (
+  1410→            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 border-2 border-[#ff8c00]/20 p-2">
+  1411→              <input value={pRole} onChange={(e) => setPRole(e.target.value.slice(0, 30))} placeholder="ROLE" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1412→              <input value={pFavHero} onChange={(e) => setPFavHero(e.target.value.slice(0, 40))} placeholder="FAV HERO" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1413→              <input value={pRank} onChange={(e) => setPRank(e.target.value.slice(0, 40))} placeholder="RANK" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1414→              <input value={pKda} onChange={(e) => setPKda(e.target.value.slice(0, 30))} placeholder="KDA" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1415→              <input value={pWinRate} onChange={(e) => setPWinRate(e.target.value.slice(0, 20))} placeholder="WR" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1416→            </div>
+  1417→          )}
+  1418→          {/* DnD-specific fields */}
+  1419→          {selectedGame === "dnd" && (
+  1420→            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 border-2 border-[#ff8c00]/20 p-2">
+  1421→              <input value={pDndChar} onChange={(e) => setPDndChar(e.target.value.slice(0, 60))} placeholder="CHARACTER NAME" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1422→              <input value={pDndRace} onChange={(e) => setPDndRace(e.target.value.slice(0, 40))} placeholder="RACE" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1423→              <input value={pDndClass} onChange={(e) => setPDndClass(e.target.value.slice(0, 40))} placeholder="CLASS" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1424→              <input value={pDndLevel} onChange={(e) => setPDndLevel(e.target.value.slice(0, 2))} placeholder="LVL" className="px-2 py-1 border border-[#ff8c00]/50 bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1425→            </div>
+  1426→          )}
+  1427→          <button onClick={createPlayer} disabled={uploadingPlayerPhoto} className="w-full bg-[#ff8c00] text-black font-bebas text-2xl py-2 border-2 border-white hover:bg-[#ff00ff] hover:text-white transition-colors no-color-transition disabled:opacity-50">{uploadingPlayerPhoto ? "UPLOADING FOTO..." : "+ ADD PLAYER"}</button>
+  1428→        </div>
+  1429→        {/* Player list */}
+  1430→        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+  1431→          {players.map((p) => (
+  1432→            <div key={p.id} className="border-2 border-[#ff8c00]/40 p-2 bg-[#1a1a1a] flex items-center gap-2">
+  1433→              <div className="w-14 h-14 flex-shrink-0 overflow-hidden border-2 border-white/30">
+  1434→                {p.img ? (
+  1435→                  <img src={p.img} alt={p.nick} className="w-full h-full object-cover grayscale" loading="lazy" />
+  1436→                ) : (
+  1437→                  <UnavailablePhoto label="NO PHOTO" nick={p.nick} color={p.color || "#ff8c00"} />
+  1438→                )}
+  1439→              </div>
+  1440→              <div className="flex-1 min-w-0">
+  1441→                <div className="font-bebas text-lg leading-none" style={{ color: p.color }}>{p.nick}</div>
+  1442→                <div className="font-mono-ud text-[10px] text-white/50">{p.name}{p.isMember && <span className="ml-1 text-[#d4ff00]">· MEMBER</span>}{!p.isMember && <span className="ml-1 text-[#ff8c00]">· GUEST</span>}</div>
+  1443→                {selectedGame === "ml" && p.role && <div className="font-mono-ud text-[9px] text-white/60 truncate">{p.role} · {p.favHero} · {p.rank}</div>}
+  1444→                {selectedGame === "dnd" && p.dndCharacter && <div className="font-mono-ud text-[9px] text-white/60 truncate">{p.dndCharacter} · {p.dndRace} · {p.dndClass} · LVL {p.dndLevel}</div>}
+  1445→              </div>
+  1446→              <button onClick={() => deletePlayer(p.id, p.nick)} className="bg-[#ff4d4d] text-white px-2 py-1 border border-white font-mono-ud text-[9px] font-bold hover:bg-[#ff8c00] transition-colors no-color-transition">DEL</button>
+  1447→            </div>
+  1448→          ))}
+  1449→          {players.length === 0 && <div className="col-span-full font-mono-ud text-xs text-white/40 text-center py-4">No players yet. Add members or external players above.</div>}
+  1450→        </div>
+  1451→      </Section>
+  1452→
+  1453→      {/* 3. MOMENTS / PHOTOS (all games) */}
+  1454→      <Section title={`MOMENTS / SCREENSHOTS — ${gameLabel}`} color="#d4ff00" icon={ImageIcon}>
+  1455→        <div className="space-y-2 border-2 border-[#d4ff00]/30 p-3 mb-3">
+  1456→          <div className="font-mono-ud text-xs text-[#d4ff00] tracking-widest">▸ UPLOAD NEW MOMENT</div>
+  1457→          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(e) => setMomentFile(e.target.files?.[0] || null)} className="block w-full text-xs font-mono-ud text-white file:mr-3 file:py-2 file:px-4 file:border-2 file:border-[#d4ff00] file:bg-[#d4ff00] file:text-black file:font-bold file:cursor-pointer file:hover:bg-[#ff00ff] file:hover:text-white" />
+  1458→          <input value={momentTitle} onChange={(e) => setMomentTitle(e.target.value.slice(0, 80))} placeholder="TITLE * (e.g. FIRST DIAMOND, CREEPER MASSACRE)" className="block w-full px-2 py-1.5 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-sm focus:outline-none focus:border-[#ff00ff]" />
+  1459→          <input value={momentDesc} onChange={(e) => setMomentDesc(e.target.value.slice(0, 300))} placeholder="Description (optional)" className="block w-full px-2 py-1.5 border-2 border-[#d4ff00] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1460→          <button onClick={uploadMoment} disabled={uploadingMoment} className="w-full bg-[#d4ff00] text-black font-bebas text-2xl py-2 border-2 border-white hover:bg-[#ff00ff] hover:text-white transition-colors no-color-transition disabled:opacity-50">{uploadingMoment ? "UPLOADING..." : "+ UPLOAD MOMENT"}</button>
+  1461→        </div>
+  1462→        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+  1463→          {moments.map((m) => (
+  1464→            <div key={m.id} className="border-2 border-[#d4ff00]/40 p-2 bg-[#1a1a1a]">
+  1465→              <img src={m.img} alt={m.title} className="w-full h-24 object-cover mb-1" loading="lazy" />
+  1466→              <div className="font-bebas text-sm text-[#d4ff00] truncate">{m.title}</div>
+  1467→              {m.description && <div className="font-mono-ud text-[9px] text-white/40 truncate">{m.description}</div>}
+  1468→              <button onClick={() => deleteMoment(m.id, m.title)} className="w-full mt-1 bg-[#ff4d4d] text-white py-1 border border-white font-mono-ud text-[9px] font-bold hover:bg-[#ff8c00] transition-colors no-color-transition">DEL</button>
+  1469→            </div>
+  1470→          ))}
+  1471→          {moments.length === 0 && <div className="col-span-full font-mono-ud text-xs text-white/40 text-center py-4">No moments yet. Upload screenshots above.</div>}
+  1472→        </div>
+  1473→      </Section>
+  1474→
+  1475→      {/* 4. D&D CHARACTERS (full character sheet with ability scores) — DnD ONLY */}
+  1476→      {selectedGame === "dnd" && (
+  1477→        <Section title="D&D CHARACTERS (FULL SHEET)" color="#8a2be2" icon={Award}>
+  1478→          <div className="font-mono-ud text-xs text-white/60 mb-2">▸ Full character sheet with ability scores (str/dex/con/int/wis/cha). Terpisah dari Players section di atas — ini untuk character detail yang punya stats lengkap.</div>
+  1479→          <div className="grid grid-cols-1 md:grid-cols-5 gap-2 mb-3 border-2 border-[#8a2be2]/30 p-3">
+  1480→            <select value={dndMember} onChange={(e) => setDndMember(e.target.value)} className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs">{MEMBER_SLUGS.map((m) => <option key={m} value={m}>{m.toUpperCase()}</option>)}</select>
+  1481→            <input value={dndName} onChange={(e) => setDndName(e.target.value.slice(0, 60))} placeholder="CHARACTER NAME *" className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1482→            <input value={dndRace} onChange={(e) => setDndRace(e.target.value.slice(0, 40))} placeholder="RACE" className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1483→            <input value={dndClass} onChange={(e) => setDndClass(e.target.value.slice(0, 40))} placeholder="CLASS" className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1484→            <input value={dndLevel} onChange={(e) => setDndLevel(e.target.value.slice(0, 2))} placeholder="LVL 1-20" className="px-2 py-2 border-2 border-[#8a2be2] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1485→          </div>
+  1486→          <button onClick={createDnd} className="w-full bg-[#8a2be2] text-white font-bebas text-2xl py-2 border-2 border-white hover:bg-[#ff00ff] transition-colors no-color-transition mb-3">+ ADD CHARACTER</button>
+  1487→          <div className="space-y-2">
+  1488→            {dndChars.map((c) => (
+  1489→              <div key={c.id} className="flex items-center justify-between border-2 border-[#8a2be2]/30 p-2">
+  1490→                <div className="flex-1">
+  1491→                  <span className="font-bebas text-lg text-[#8a2be2]">{c.characterName}</span>
+  1492→                  <span className="font-mono-ud text-xs text-white/60 ml-2">{c.memberId.toUpperCase()} · {c.race} · {c.charClass} · LVL {c.level}</span>
+  1493→                </div>
+  1494→                <button onClick={() => deleteDnd(c.id, c.characterName)} className="bg-[#ff4d4d] text-white px-2 py-1 border-2 border-white font-mono-ud text-[10px] font-bold hover:bg-[#ff8c00] transition-colors no-color-transition">DEL</button>
+  1495→              </div>
+  1496→            ))}
+  1497→            {dndChars.length === 0 && <div className="font-mono-ud text-xs text-white/40 text-center py-4">No D&D characters yet. Add one above.</div>}
+  1498→          </div>
+  1499→        </Section>
+  1500→      )}
+  1501→
+  1502→      {/* 5. D&D CAMPAIGNS — DnD ONLY */}
+  1503→      {selectedGame === "dnd" && (
+  1504→        <Section title="D&D CAMPAIGNS" color="#ff4d4d" icon={Shield}>
+  1505→          <div className="font-mono-ud text-xs text-white/60 mb-2">▸ DnD-specific: campaign name, DM, status, sessions.</div>
+  1506→          <div className="space-y-2 border-2 border-[#ff4d4d]/30 p-3 mb-3">
+  1507→            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+  1508→              <input value={campName} onChange={(e) => setCampName(e.target.value.slice(0, 80))} placeholder="CAMPAIGN NAME *" className="px-2 py-1.5 border-2 border-[#ff4d4d] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1509→              <input value={campDm} onChange={(e) => setCampDm(e.target.value.slice(0, 60))} placeholder="DM (Dungeon Master)" className="px-2 py-1.5 border-2 border-[#ff4d4d] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1510→            </div>
+  1511→            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+  1512→              <select value={campStatus} onChange={(e) => setCampStatus(e.target.value)} className="px-2 py-1.5 border-2 border-[#ff4d4d] bg-[#1a1a1a] text-white font-mono-ud text-xs">{["ONGOING", "COMPLETED", "PAUSED"].map((s) => <option key={s} value={s}>{s}</option>)}</select>
+  1513→              <input value={campSessions} onChange={(e) => setCampSessions(e.target.value.slice(0, 3))} placeholder="SESSIONS" className="px-2 py-1.5 border-2 border-[#ff4d4d] bg-[#1a1a1a] text-white font-mono-ud text-xs focus:outline-none focus:border-[#ff00ff]" />
+  1514→            </div>
+  1515→            <textarea value={campDesc} onChange={(e) => setCampDesc(e.target.value.slice(0, 500))} placeholder="Description" rows={2} className="block w-full px-2 py-1.5 border-2 border-[#ff4d4d] bg-[#1a1a1a] text-white font-mono-ud text-xs resize-none focus:outline-none focus:border-[#ff00ff]" />
+  1516→          </div>
+  1517→          <button onClick={createCampaign} className="w-full bg-[#ff4d4d] text-white font-bebas text-2xl py-2 border-2 border-white hover:bg-[#ff00ff] transition-colors no-color-transition mb-3">+ ADD CAMPAIGN</button>
+  1518→          <div className="space-y-2">
+  1519→            {dndCampaigns.map((c) => (
+  1520→              <div key={c.id} className="flex items-center justify-between border-2 border-[#ff4d4d]/30 p-2">
+  1521→                <div className="flex-1">
+  1522→                  <span className="font-bebas text-lg text-[#ff4d4d]">{c.name}</span>
+  1523→                  <span className="font-mono-ud text-xs text-white/60 ml-2">DM: {c.dm} · {c.status} · {c.sessions} sessions</span>
+  1524→                  {c.description && <div className="font-mono-ud text-[10px] text-white/40 mt-1">{c.description}</div>}
+  1525→                </div>
+  1526→                <button onClick={() => deleteCampaign(c.id, c.name)} className="bg-[#ff4d4d] text-white px-2 py-1 border-2 border-white font-mono-ud text-[10px] font-bold hover:bg-[#ff8c00] transition-colors no-color-transition">DEL</button>
+  1527→              </div>
+  1528→            ))}
+  1529→            {dndCampaigns.length === 0 && <div className="font-mono-ud text-xs text-white/40 text-center py-4">No campaigns yet. Add one above.</div>}
+  1530→          </div>
+  1531→        </Section>
+  1532→      )}
+  1533→
+  1534→      {/* 6. COMPATIBILITY (all games) */}
+  1535→      <Section title={`COMPATIBILITY — ${gameLabel}`} color="#d4ff00" icon={Shield}>
+  1536→        <div className="font-mono-ud text-xs text-white/60 mb-2">▸ Per-member × game: — (none), RARE, CASUAL, MAIN. Berlaku untuk semua game. Ini untuk member saja.</div>
+  1537→        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+  1538→          {MEMBER_SLUGS.map((slug) => {
+  1539→            const c = gameCompat.find((co) => co.memberId === slug);
+  1540→            const level = c?.level ?? 0;
+  1541→            return (
+  1542→              <div key={slug} className="border-2 border-[#d4ff00]/30 p-2">
+  1543→                <div className="font-bebas text-lg text-[#d4ff00] mb-1">{slug.toUpperCase()}</div>
+  1544→                <div className="flex gap-1">
+  1545→                  {COMPAT_LABELS.map((label, i) => (
+  1546→                    <button key={label} onClick={() => setCompat(slug, i)}
+  1547→                      className={cn("flex-1 px-1 py-1 border font-mono-ud text-[10px] font-bold transition-all no-color-transition",
+  1548→                        level === i ? "bg-[#d4ff00] text-black border-white" : "bg-transparent text-white/40 border-white/20 hover:text-white")}>
+  1549→                      {label}
+  1550→                    </button>
+  1551→                  ))}
+  1552→                </div>
+  1553→              </div>
+  1554→            );
+  1555→          })}
+  1556→        </div>
+  1557→      </Section>
+  1558→    </div>
+  1559→  );
+  1560→}
+  1561→
+  1562→// ═══════════════════════════════════════════════════════════════════════════
+  1563→// INFO TAB — Documentation
+  1564→// ═══════════════════════════════════════════════════════════════════════════
+  1565→function InfoTab() {
+  1566→  return (
+  1567→    <div className="border-8 border-[#00e5ff] bg-black p-6 shadow-[12px_12px_0_#00e5ff]">
+  1568→      <h2 className="font-bebas text-4xl text-[#00e5ff] mb-4 flex items-center gap-2"><Settings className="w-8 h-8" /> SYSTEM INFO</h2>
+  1569→      <div className="space-y-4 font-mono-ud text-xs text-white/80">
+  1570→        <div>
+  1571→          <h3 className="font-bebas text-2xl text-[#00e5ff] mb-2 border-b-2 border-[#00e5ff]/30 pb-1">▸ TABS BY PAGE</h3>
+  1572→          <div className="space-y-1 text-[11px]">
+  1573→            <div>▸ <span className="text-[#d4ff00]">ABOUT:</span> Members (profile + CV) + Quotes</div>
+  1574→            <div>▸ <span className="text-[#d4ff00]">GALLERY:</span> Photo upload + masonry + edit + delete</div>
+  1575→            <div>▸ <span className="text-[#d4ff00]">NEWS:</span> Article CRUD + pin/unpin</div>
+  1576→            <div>▸ <span className="text-[#d4ff00]">GUESTBOOK:</span> Entry CRUD</div>
+  1577→            <div>▸ <span className="text-[#d4ff00]">PORTFOLIO:</span> Projects + Achievements CRUD</div>
+  1578→          </div>
+  1579→        </div>
+  1580→        <div>
+  1581→          <h3 className="font-bebas text-2xl text-[#00e5ff] mb-2 border-b-2 border-[#00e5ff]/30 pb-1">▸ API ENDPOINTS</h3>
+  1582→          <div className="space-y-1 text-[11px]">
+  1583→            <div className="text-[#d4ff00]">MEMBERS:</div>
+  1584→            <div>  GET /api/members · GET /api/members/[slug]</div>
+  1585→            <div>  PUT /api/members/[slug] · POST /api/members/upload</div>
+  1586→            <div className="text-[#d4ff00] mt-1">GALLERY:</div>
+  1587→            <div>  GET/POST/PUT/DELETE /api/gallery · POST /api/gallery/upload</div>
+  1588→            <div className="text-[#d4ff00] mt-1">NEWS:</div>
+  1589→            <div>  GET/POST/PUT/DELETE /api/news</div>
+  1590→            <div className="text-[#d4ff00] mt-1">GUESTBOOK:</div>
+  1591→            <div>  GET/POST/PUT/DELETE /api/guestbook</div>
+  1592→            <div className="text-[#d4ff00] mt-1">PORTFOLIO:</div>
+  1593→            <div>  GET/POST/DELETE /api/portfolio</div>
+  1594→            <div className="text-[#d4ff00] mt-1">ACHIEVEMENTS:</div>
+  1595→            <div>  GET/POST/DELETE /api/achievements</div>
+  1596→            <div className="text-[#d4ff00] mt-1">QUOTES:</div>
+  1597→            <div>  GET/POST/DELETE /api/quotes</div>
+  1598→            <div className="text-[#d4ff00] mt-1">AUTH:</div>
+  1599→            <div>  GET /api/chaos-token · GET /api/health</div>
+  1600→          </div>
+  1601→        </div>
+  1602→        <div>
+  1603→          <h3 className="font-bebas text-2xl text-[#00e5ff] mb-2 border-b-2 border-[#00e5ff]/30 pb-1">▸ CHAOS MODE ACCESS</h3>
+  1604→          <div className="space-y-1 text-[11px]">
+  1605→            <div>1. Activate Chaos Mode (Shuffle button in navbar)</div>
+  1606→            <div>2. Enter sequence: <span className="text-[#d4ff00]">↑ ↓ ← → ← ← ↑</span></div>
+  1607→            <div className="pl-4 text-white/50">📱 Mobile: Swipe gesture</div>
+  1608→            <div className="pl-4 text-white/50">⌨️ Desktop: Arrow keys</div>
+  1609→            <div>3. God Mode unlocks → CHAOS MODE button appears</div>
+  1610→            <div>4. Expires after 1hr 30min inactivity</div>
+  1611→          </div>
+  1612→        </div>
+  1613→        <div>
+  1614→          <h3 className="font-bebas text-2xl text-[#00e5ff] mb-2 border-b-2 border-[#00e5ff]/30 pb-1">▸ ARCHITECTURE</h3>
+  1615→          <div className="space-y-1 text-[11px]">
+  1616→            <div>▸ <span className="text-[#d4ff00]">Hosting:</span> Vercel (Next.js 16)</div>
+  1617→            <div>▸ <span className="text-[#d4ff00]">Database:</span> Supabase PostgreSQL</div>
+  1618→            <div>▸ <span className="text-[#d4ff00]">Storage:</span> Supabase Bucket</div>
+  1619→            <div>▸ <span className="text-[#d4ff00]">Auth:</span> Chaos-mode token</div>
+  1620→          </div>
+  1621→        </div>
+  1622→      </div>
+  1623→    </div>
+  1624→  );
+  1625→}
+  1626→
+  1627→export { ChaosModePage };
+  1628→

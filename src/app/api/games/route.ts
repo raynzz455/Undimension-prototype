@@ -38,8 +38,8 @@ export async function GET() {
     );
     return NextResponse.json({ games: expanded });
   } catch (e) {
-    console.warn("[GET /api/games] DB unavailable, serving static.", e instanceof Error ? e.message : e);
-    return NextResponse.json({ games: GAMES });
+    console.warn("[GET /api/games] DB unavailable, returning 503.", e instanceof Error ? e.message : e);
+    return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });
   }
 }
 

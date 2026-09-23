@@ -12,8 +12,8 @@ export async function GET() {
     const campaigns = await db.dnDCampaign.findMany({ orderBy: { createdAt: "desc" }, include: { images: true } });
     return NextResponse.json({ campaigns });
   } catch (e) {
-    console.warn("[GET /api/games/dnd-campaigns] DB error, returning empty.", e instanceof Error ? e.message : e);
-    return NextResponse.json({ campaigns: [] });
+    console.warn("[GET /api/games/dnd-campaigns] DB unavailable, returning 503.", e instanceof Error ? e.message : e);
+    return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });
   }
 }
 

@@ -19,11 +19,8 @@ export async function GET(req: NextRequest) {
     });
     return NextResponse.json({ players });
   } catch (e) {
-    // Graceful fallback — if the table doesn't exist (migration not run) or
-    // the DB is temporarily unavailable, return empty so the frontend falls
-    // back to static GAME_DETAILS players. No 500.
-    console.warn("[GET /api/games/players] DB error, returning empty.", e instanceof Error ? e.message : e);
-    return NextResponse.json({ players: [] });
+    console.warn("[GET /api/games/players] DB unavailable, returning 503.", e instanceof Error ? e.message : e);
+    return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });
   }
 }
 

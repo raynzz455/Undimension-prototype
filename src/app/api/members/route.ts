@@ -56,7 +56,10 @@ export async function GET() {
     const data = members.map(mapMember);
     return NextResponse.json({ members: data });
   } catch (e) {
-    console.warn("[GET /api/members] DB unavailable, serving static members.", e instanceof Error ? e.message : e);
-    return NextResponse.json({ members: MEMBERS });
+    // DB failure: return 503 so the frontend KEEPS previous data
+    // (useFetch keeps old data on 503). Don't return static fallback
+    // with 200 — that would replace real data with dummy data.
+    console.warn("[GET /api/members] DB unavailable, returning 503.", e instanceof Error ? e.message : e);
+    return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });
   }
 }

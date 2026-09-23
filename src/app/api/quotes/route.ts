@@ -17,8 +17,8 @@ export async function GET() {
     const merged = quotes.length > 0 ? quotes : RANDOM_QUOTES.map((q, i) => ({ id: `static-${i}`, ...q, order: i }));
     return NextResponse.json({ quotes: merged, count: merged.length });
   } catch (e) {
-    const staticQuotes = RANDOM_QUOTES.map((q, i) => ({ id: `static-${i}`, ...q, order: i }));
-    return NextResponse.json({ quotes: staticQuotes, count: staticQuotes.length });
+    console.warn("[GET /api/quotes] DB unavailable, returning 503.", e instanceof Error ? e.message : e);
+    return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });
   }
 }
 

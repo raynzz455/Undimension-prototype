@@ -26,7 +26,10 @@ export async function GET(req: NextRequest) {
       images: a.images.map((img) => ({ id: img.id, img: img.img })),
     }));
     return NextResponse.json({ achievements, count: achievements.length });
-  } catch (e) { return NextResponse.json({ achievements: [], count: 0 }); }
+  } catch (e) {
+    console.warn("[GET /api/achievements] DB unavailable, returning 503.", e instanceof Error ? e.message : e);
+    return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });
+  }
 }
 
 export async function POST(req: NextRequest) {

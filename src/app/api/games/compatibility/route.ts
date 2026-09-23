@@ -14,8 +14,8 @@ export async function GET(req: NextRequest) {
     const compat = await db.gameCompatibility.findMany(gameId ? { where: { gameId } } : undefined);
     return NextResponse.json({ compat });
   } catch (e) {
-    console.warn("[GET /api/games/compatibility] DB error, returning empty.", e instanceof Error ? e.message : e);
-    return NextResponse.json({ compat: [] });
+    console.warn("[GET /api/games/compatibility] DB unavailable, returning 503.", e instanceof Error ? e.message : e);
+    return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });
   }
 }
 

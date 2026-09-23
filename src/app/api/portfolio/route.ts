@@ -20,7 +20,8 @@ export async function GET() {
     const merged = [...projects, ...PORTFOLIO_PROJECTS];
     return NextResponse.json({ projects: merged, count: merged.length });
   } catch (e) {
-    return NextResponse.json({ projects: PORTFOLIO_PROJECTS, count: PORTFOLIO_PROJECTS.length });
+    console.warn("[GET /api/portfolio] DB unavailable, returning 503.", e instanceof Error ? e.message : e);
+    return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });
   }
 }
 

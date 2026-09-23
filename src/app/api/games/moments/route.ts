@@ -20,10 +20,8 @@ export async function GET(req: NextRequest) {
     });
     return NextResponse.json({ moments });
   } catch (e) {
-    // Graceful fallback — return empty if the table doesn't exist (migration
-    // not run) or DB is unavailable. Frontend falls back to static moments.
-    console.warn("[GET /api/games/moments] DB error, returning empty.", e instanceof Error ? e.message : e);
-    return NextResponse.json({ moments: [] });
+    console.warn("[GET /api/games/moments] DB unavailable, returning 503.", e instanceof Error ? e.message : e);
+    return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });
   }
 }
 

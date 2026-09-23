@@ -12,7 +12,8 @@ export async function GET() {
       const rows = await db.galleryPhoto.findMany({ orderBy: { createdAt: "desc" } });
       dbPhotos = rows.map((p) => ({ id: p.id, img: p.img, title: p.title, date: p.date, rotate: p.rotate, author: p.author }));
     } catch (e) {
-      console.warn("[GET /api/gallery] DB unavailable, serving static photos only.", e instanceof Error ? e.message : e);
+      console.warn("[GET /api/gallery] DB unavailable, returning 503.", e instanceof Error ? e.message : e);
+      return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });
     }
   }
   // If DB has photos, return ONLY DB photos (static GALLERY_PHOTOS disappear).

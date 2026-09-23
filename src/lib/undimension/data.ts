@@ -565,7 +565,7 @@ export const TIMELINE: TimelineMilestone[] = [
     season: "Q1 · SMK INFOKOM BOGOR",
     title: "THE FOUR PILLARS",
     description:
-      "Empat anak dipertemukan di satu meja SMK Infokom Bogor — Aldi, Eja, Byan, dan Razka. Obrolan tentang game jadi jembatan. Tanpa disadari, sebuah circle pertama kali terbentuk. Inilah titik nol dari mana semua orbit dimulai.",
+      "Empat anak dipertemukan di satu meja SMK Infokom Bogor. Aldi, Eja, Byan, dan Razka. Obrolan tentang game menjadi jembatan, dan tanpa disadari, sebuah circle pertama kali terbentuk. Inilah titik nol dari mana segala orbit bermula.",
     color: "#ff4d4d",
     icon: "✦",
   },
@@ -575,7 +575,7 @@ export const TIMELINE: TimelineMilestone[] = [
     season: "Q2 · THE CIRCLE GROWS",
     title: "SEVEN SOULS ASSEMBLED",
     description:
-      "Rasya dan Rifqi bergabung, membawa warna baru ke circle. Tak lama setelahnya, Raditya (Dudit) join sebagai member terakhir. Tujuh entitas kini selaras — orbit penuh terbentuk, siap menghadapi apa pun yang datang.",
+      "Rasya dan Rifqi bergabung, membawa warna baru ke dalam circle. Tak lama berselang, Raditya atau Dudit masuk sebagai member terakhir. Tujuh entitas kini selaras. Orbit penuh terbentuk, siap menyongsong segala yang kan datang.",
     color: "#00e5ff",
     icon: "◆",
   },
@@ -585,7 +585,7 @@ export const TIMELINE: TimelineMilestone[] = [
     season: "Q3-Q4 · CLASS MEETING ERA",
     title: "MOBILE LEGENDS DOMINANCE",
     description:
-      "Era Mobile Legends. Push rank, draft chaos, dan class meeting di sekolah adalah keharusan yang tak boleh kalah. Setiap match adalah ujian persahabatan — lag merah, afk, saling menyalahkan — tapi tidak pernah patah. Kemenangan adalah satu-satunya pilihan.",
+      "Era Mobile Legends. Push rank, draft penuh chaos, dan class meeting di sekolah adalah keharusan yang tak boleh kalah. Setiap match menjadi ujian persahabatan. Lag merah, afk, saling menyalahkan, namun tak pernah patah. Kemenangan adalah satu-satunya pilihan.",
     color: "#d4ff00",
     icon: "⚔",
   },
@@ -595,7 +595,7 @@ export const TIMELINE: TimelineMilestone[] = [
     season: "Q1-Q4 · BLOCKS & RAMADAN",
     title: "MINECRAFT & THE HOLY MONTH",
     description:
-      "Era Minecraft dimulai dari event keseharian sewaktu puasa Ramadan. Diamond ditambang bareng jam 3 pagi, base digrebeg creeper. Di tahun yang sama, Roblox masuk — bermain di mobile device saat di kelas, obby absurd yang bikin emosi kolektif.",
+      "Era Minecraft bermula dari keseharian sewaktu puasa Ramadan. Diamond ditambang bersama di jam tiga pagi, base digrebeg creeper. Di tahun yang sama, Roblox masuk. Bermain di mobile device saat di kelas, obby absurd yang memancing emosi kolektif.",
     color: "#ff00ff",
     icon: "⛏",
   },
@@ -605,7 +605,7 @@ export const TIMELINE: TimelineMilestone[] = [
     season: "Q1-Q3 · OOF SYMPHONY",
     title: "ROBLOX PEAK",
     description:
-      "Puncak era Roblox. Obby level 100 yang bikin emosi, roleplay yang nggak masuk akal, 'oof' terdengar ratusan kali sehari. Imajinasi kolektif mencapai puncak kekacauan yang indah. Setiap sesi adalah petualangan yang tak terduga.",
+      "Puncak era Roblox. Obby level seratus yang memancing emosi, roleplay yang tak masuk akal, bunyi oof terdengar ratusan kali sehari. Imajinasi kolektif mencapai puncak kekacauan yang indah. Setiap sesi adalah petualangan yang tak terduga.",
     color: "#ff8c00",
     icon: "◉",
   },
@@ -615,7 +615,7 @@ export const TIMELINE: TimelineMilestone[] = [
     season: "Q4 · D&D AWAKENS",
     title: "DIVINE SOULS",
     description:
-      "Terinspirasi nonton video komedian Raditya Dika bermain D&D, kami mulai era tabletop pertama. Campaign pertama: 'Divine Souls, Search of Maria' — petualangan epik yang dimulai dengan semangat membara. Sayangnya, campaign ini tidak sempat selesai. Tapi rasa penasaran tidak pernah padam.",
+      "Terinspirasi dari video komedian Raditya Dika bermain D&D, kami memulai era tabletop pertama. Campaign pertama, Divine Souls, Search of Maria, petualangan epik yang dimulai dengan semangat membara. Sayangnya campaign ini tak sempat tuntas. Namun rasa penasaran tak pernah padam.",
     color: "#8a2be2",
     icon: "🎲",
   },
@@ -625,7 +625,7 @@ export const TIMELINE: TimelineMilestone[] = [
     season: "Q1-Q2 · LOST SERENITY",
     title: "THE PORTAL HOME",
     description:
-      "Campaign kedua: 'Lost Serenity' — berfokus pada eksplorasi dungeon yang dalam dan gelap. Setiap ruangan adalah misteri, setiap dadu adalah harapan. Campaign ini berakhir selesai — menemukan portal menuju kembali ke daratan atas. Kemenangan yang manis. Di masa ini juga, kami mulai dekat dengan Nayla — dia menjadi hidden member kami.",
+      "Campaign kedua, Lost Serenity, berfokus pada eksplorasi dungeon yang dalam dan gelap. Setiap ruangan adalah misteri, setiap lemparan dadu adalah harapan. Campaign ini tuntas dengan ditemukannya portal menuju kembali ke daratan atas. Kemenangan yang manis. Di masa ini pula kami mulai rumpun dekat dengan Nayla, dan ia menjadi hidden member kami.",
     color: "#00ff00",
     icon: "⚡",
   },
@@ -635,7 +635,7 @@ export const TIMELINE: TimelineMilestone[] = [
     season: "Q3 · THE FAREWELL",
     title: "OFFLINE TO ONLINE",
     description:
-      "Perpisahan kami. Pertemuan tatap muka yang dominasi sebelumnya perlahan berganti dengan online. Setelah perpisahan, kami mulai sering bermain Roblox lagi dan berfokus pada horror game — ketakutan kolektif yang justru mempererat. Suasana berubah, tapi ikatan tidak.",
+      "Perpisahan kami. Pertemuan tatap muka yang dahulu mendominasi perlahan berganti dengan online. Setelah perpisahan, kami semakin sering bermain Roblox dan berfokus pada horror game. Ketakutan kolektif yang justru mempererat. Suasana berubah, tetapi ikatan tidak.",
     color: "#ff006e",
     icon: "☾",
   },
@@ -645,7 +645,7 @@ export const TIMELINE: TimelineMilestone[] = [
     season: "Q4 · NOW",
     title: "SCATTERED STARS",
     description:
-      "Semuanya berbeda. Kami terpencar-pencar, punya tujuan masing-masing untuk dikejar. Kuliah, kerja, hidup. Tapi website ini dibuat untuk nostalgia — kenangan-kenangan yang tidak boleh hilang. Tujuh orbit yang berbeda, tetap selaras. Ini bukan akhir. Ini konstanta digital.",
+      "Segalanya berubah. Kami terpencar, membawa tujuan masing-masing untuk dikejar. Kuliah, kerja, kehidupan. Namun website ini lahir untuk nostalgia, kenangan yang tak boleh hilang. Tujuh orbit yang berbeda tetap selaras. Ini bukan akhir. Ini konstanta digital.",
     color: "#00e5ff",
     icon: "★",
   },

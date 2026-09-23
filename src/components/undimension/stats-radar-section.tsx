@@ -12,26 +12,32 @@ import {
   Legend,
 } from "recharts";
 import { MEMBERS, type Member } from "@/lib/undimension/data";
+import { useChaos } from "./chaos-provider";
+import { useFetch } from "@/hooks/use-fetch";
 import { cn } from "@/lib/utils";
 import { Radar as RadarIcon, Shuffle, Eye, EyeOff } from "lucide-react";
 
-// Stats are D&D scores (3-20 range) or "MAX"/"???". Normalize to 0-100 for chart.
+// Stats are D&D scores (3-20 range) or "MAX"/"???"/anomaly. Normalize to 0-100 for chart.
 // D&D scale: 3-20, so multiply by 5 (3→15, 20→100)
+// Anomaly values (e.g. 9999) are capped at 100 for the chart, but the raw
+// value is shown in the leaderboard so the user sees the actual number.
 function statToNum(value: string): number {
   if (value === "MAX") return 100;
   if (value === "???" || value === "??") return 50;
   const n = parseInt(value, 10);
   if (Number.isNaN(n)) return 50;
   // D&D stats are 3-20, scale to 0-100
+  // Anomaly: if n > 20, it's an anomaly (e.g. 9999). Cap at 100.
   return Math.min(100, Math.max(0, n * 5));
 }
 
-// Build radar data: [{ stat: "STR", aldi: 80, razka: 40, ... }, ...]
-function buildRadarData(activeIds: Set<string>) {
-  const statLabels = MEMBERS[0].stats.map((s) => s.label);
+// Build radar data from the given members (not hardcoded MEMBERS)
+function buildRadarData(members: Member[], activeIds: Set<string>) {
+  if (!members.length) return [];
+  const statLabels = members[0].stats.map((s) => s.label);
   return statLabels.map((label) => {
     const row: Record<string, string | number> = { stat: label };
-    MEMBERS.forEach((m) => {
+    members.forEach((m) => {
       const s = m.stats.find((x) => x.label === label);
       row[m.id] = activeIds.has(m.id) && s ? statToNum(s.value) : 0;
     });
@@ -47,6 +53,7 @@ const MEMBER_COLORS: Record<string, string> = {
   rasya: "#ff8c00",
   rifqi: "#00ff00",
   dudit: "#8a2be2",
+  nayla: "#ff006e",
 };
 
 function MemberToggle({
@@ -77,6 +84,13 @@ function MemberToggle({
 }
 
 export function StatsRadarSection() {
+  // Fetch members from API (DB-backed) with static fallback.
+  // This ensures the radar chart reflects updates made via chaos-mode.
+  const { data: membersData } = useFetch<{ members: Member[] }>("/api/members");
+  const { naylaRevealed } = useChaos();
+  const allMembers = membersData?.members ?? MEMBERS;
+  const members = allMembers.filter((m) => !m.hidden || naylaRevealed);
+
   // Default: show 3 members to avoid clutter, user can toggle others
   const [activeIds, setActiveIds] = useState<Set<string>>(
     () => new Set(["aldi", "razka", "reza"]),
@@ -96,12 +110,11 @@ export function StatsRadarSection() {
 
   const randomize = () => {
     setActiveIds((prev) => {
-      const pool = MEMBERS.map((m) => m.id).filter((id) => !prev.has(id));
-      if (pool.length === 0) return new Set([MEMBERS[0].id]);
+      const pool = members.map((m) => m.id).filter((id) => !prev.has(id));
+      if (pool.length === 0) return new Set([members[0]?.id || "aldi"]);
       const pick = pool[Math.floor(Math.random() * pool.length)];
       const next = new Set(prev);
       if (next.size >= 4) {
-        // swap: remove oldest-added (first in iteration)
         const first = next.values().next().value;
         if (first) next.delete(first);
       }
@@ -110,7 +123,7 @@ export function StatsRadarSection() {
     });
   };
 
-  const data = useMemo(() => buildRadarData(activeIds), [activeIds]);
+  const data = useMemo(() => buildRadarData(members, activeIds), [members, activeIds]);
 
   return (
     <div className="relative bg-white dark:bg-[#09090b] py-24 px-6 md:px-12 border-t-8 border-black dark:border-white overflow-hidden">
@@ -171,7 +184,7 @@ export function StatsRadarSection() {
                     tick={false}
                     axisLine={false}
                   />
-                  {MEMBERS.map((m) =>
+                  {members.map((m) =>
                     activeIds.has(m.id) ? (
                       <Radar
                         key={m.id}
@@ -208,7 +221,7 @@ export function StatsRadarSection() {
                 <RadarIcon className="w-6 h-6" /> ENTITIES
               </h3>
               <div className="flex flex-wrap gap-2">
-                {MEMBERS.map((m) => (
+                {members.map((m) => (
                   <MemberToggle
                     key={m.id}
                     m={m}
@@ -228,7 +241,7 @@ export function StatsRadarSection() {
                 PEAK VALUES
               </h3>
               <div className="space-y-1.5">
-                {MEMBERS.map((m) => {
+                {members.map((m) => {
                   const peak = Math.max(
                     ...m.stats.map((s) => statToNum(s.value)),
                   );

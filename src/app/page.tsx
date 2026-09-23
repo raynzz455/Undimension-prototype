@@ -10,6 +10,7 @@ import { PortfolioPage } from "@/components/undimension/portfolio-page";
 import { ChaosModePage } from "@/components/undimension/chaos-mode-page";
 import { ScrollProgress } from "@/components/undimension/scroll-progress";
 import { BackToTop } from "@/components/undimension/back-to-top";
+import { NotificationBanner } from "@/components/undimension/notification-banner";
 import { KeyboardShortcutsOverlay } from "@/components/undimension/keyboard-shortcuts-overlay";
 import { Soundboard } from "@/components/undimension/soundboard";
 import { BackgroundMusic } from "@/components/undimension/background-music";
@@ -298,6 +299,7 @@ export default function Home() {
       {/* Hide NavBar, ScrollProgress, Footer, and floating buttons when in chaos mode */}
       {page !== "chaosmode" && <ScrollProgress />}
       {page !== "chaosmode" && <NavBar current={page} setPage={setPage} />}
+      {page !== "chaosmode" && <NotificationBanner />}
       <main id="main" className="flex-1 relative z-10">
         {page === "about" && <AboutPage />}
         {page === "memories" && <MemoriesPage />}

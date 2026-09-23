@@ -89,12 +89,16 @@ export function useFetch<T>(url: string, opts?: FetchOpts): State<T> {
           if (ac.signal.aborted) return;
           if (mountedRef.current) {
             // On error: KEEP previous data (don't clear).
-            // Only set error state — the UI still shows last good data.
             if (dataRef.current) {
               setData(dataRef.current);
             }
             setError(e instanceof Error ? e.message : "fetch failed");
             setLoading(false);
+            // Dispatch global event so the NotificationBanner can show
+            // a warning to the user about the connection issue.
+            window.dispatchEvent(new CustomEvent("ud-notify-error", {
+              detail: { message: "Internetmu lambat sehingga koneksi dengan sumber data terganggu." },
+            }));
           }
         });
     };

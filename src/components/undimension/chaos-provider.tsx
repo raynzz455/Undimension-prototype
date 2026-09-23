@@ -187,7 +187,13 @@ export function ChaosProvider({ children }: { children: ReactNode }) {
       // When chaos is toggled ON, reveal hidden members (like Nayla).
       // This flag is session-only (not persisted) — stays true even when
       // chaos is toggled OFF. Resets on page refresh.
-      if (next) setNaylaRevealed(true);
+      if (next) {
+        setNaylaRevealed(true);
+        // Dispatch global event for the NotificationBanner
+        window.dispatchEvent(new CustomEvent("ud-notify-secret", {
+          detail: { message: "Secret member appeared! Naye telah muncul." },
+        }));
+      }
       return next;
     });
   }, [palette]);

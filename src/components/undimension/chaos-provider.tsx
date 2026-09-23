@@ -187,16 +187,23 @@ export function ChaosProvider({ children }: { children: ReactNode }) {
       // When chaos is toggled ON, reveal hidden members (like Nayla).
       // This flag is session-only (not persisted) — stays true even when
       // chaos is toggled OFF. Resets on page refresh.
-      if (next) {
-        setNaylaRevealed(true);
-        // Dispatch global event for the NotificationBanner
-        window.dispatchEvent(new CustomEvent("ud-notify-secret", {
-          detail: { message: "Secret member appeared! Naye telah muncul." },
-        }));
-      }
+      if (next) setNaylaRevealed(true);
       return next;
     });
   }, [palette]);
+
+  // Fire the 'secret member' notification ONCE when naylaRevealed goes
+  // from false to true (first reveal in this session). Subsequent shuffle
+  // toggles won't fire it again (naylaRevealed stays true).
+  // Uses useEffect (not inside the state updater) because React 18+
+  // state updaters should be pure — no side effects like dispatchEvent.
+  useEffect(() => {
+    if (naylaRevealed) {
+      window.dispatchEvent(new CustomEvent("ud-notify-secret", {
+        detail: { message: "Secret member appeared! Naye telah muncul." },
+      }));
+    }
+  }, [naylaRevealed]);
 
   const unlockGodMode = useCallback(() => {
     setGodMode(true);

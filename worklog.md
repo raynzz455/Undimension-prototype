@@ -2255,3 +2255,56 @@ If the user STILL sees "required chaos mode" on mobile after this fix, the remai
 4. **Pre-fetch token on page load**: if `ud-godmode` is in localStorage, proactively fetch the token on page load (before any CRUD) to eliminate the first-request latency + race condition entirely.
 
 Full work record: appended to `/home/z/my-project/worklog.md` (this section).
+
+---
+Task ID: 39
+Agent: main (Z.ai Code)
+Task: User follow-up question — do they need to update DATABASE_URL in Vercel AND GitHub Actions after switching to Supabase PgBouncer pooler URL?
+
+## Section 1: Question & Context
+
+User asked (in Indonesian): "tapi apakah di vercel juga perlu di ganti terkait env database url begitu juga dengan github actions?"
+
+Context: Previous discussion about reducing frequent 503 errors on Supabase free tier by switching from direct connection (port 5432) to PgBouncer transaction pooler (port 6543). User wanted confirmation on whether the env var change needs to be applied in Vercel + GitHub Actions, not just locally.
+
+## Section 2: Answer Provided
+
+**YES — must update DATABASE_URL in BOTH places (they do not sync with local .env.local):**
+
+1. **Vercel (app runtime)** — use **Transaction Pooler URL (port 6543)** with `?pgbouncer=true&connection_limit=1`:
+   - Vercel Dashboard → Project → Settings → Environment Variables → `DATABASE_URL`
+   - Apply to all environments (Production / Preview / Development)
+   - This is what the Next.js app uses to serve user requests → reduces 503s
+
+2. **GitHub Actions `db-migrate.yml`** — use **Direct Connection URL (port 5432)**:
+   - GitHub repo → Settings → Secrets and variables → Actions → `DATABASE_URL`
+   - Reason: `db:push` runs DDL (CREATE/ALTER TABLE) which is unreliable over PgBouncer transaction-mode
+   - This workflow only runs on schema changes (rare), so no user-facing 503 impact
+
+3. **Workflows NOT affected** (no DATABASE_URL usage):
+   - `supabase-keepalive.yml` — uses REST API via `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_KEY`
+   - `webp-guardian.yml` — no DATABASE_URL
+   - `convert-webp-supabase.yml` — no DATABASE_URL
+
+4. **Optional schema hardening** — can add `directUrl = env("DIRECT_URL")` to `datasource db` block in `prisma/schema.prisma` to explicitly separate app-runtime URL from migration URL. Optional for `db:push` workflow; required if using `prisma migrate` (which we don't currently use).
+
+## Section 3: URL Formats Reference
+
+| Where | Format | Port | Purpose |
+|---|---|---|---|
+| Vercel `DATABASE_URL` | `postgresql://postgres.[REF]:[PASS]@aws-0-[REGION].pooler.supabase.co:6543/postgres?pgbouncer=true&connection_limit=1` | 6543 | App runtime (serverless) |
+| GitHub `DATABASE_URL` | `postgresql://postgres:[PASS]@db.[REF].supabase.co:5432/postgres` | 5432 | Migrations / `db:push` |
+| Local `.env.local` | Either (pooler recommended) | 6543 / 5432 | Dev |
+
+## Section 4: No Code Changes
+
+- No code changes made in this task — pure infra/answer.
+- `src/lib/db.ts` already has a comment directing users to use pooler URL (port 6543).
+- `prisma/schema.prisma` uses `url = env("DATABASE_URL")` only (no `directUrl`) — fine for `db:push` workflow.
+
+## Section 5: Next-phase Recommendations
+
+1. **User action**: update DATABASE_URL in Vercel + GitHub secrets (per the table above).
+2. **Verify after update**: trigger `Database Setup` workflow manually → check it succeeds. Redeploy Vercel → check 503 frequency drops.
+3. **Optional schema hardening**: add `directUrl = env("DIRECT_URL")` to schema + set `DIRECT_URL` secret in Vercel + GitHub = more explicit separation. Not urgent since we only use `db:push`.
+4. **Monitor 503 frequency**: after the pooler URL is live, observe whether the `ud-notify-error` popup frequency drops. If still frequent, investigate if PgBouncer itself is hitting the free-tier pool limit (rare).

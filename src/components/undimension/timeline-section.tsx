@@ -145,7 +145,7 @@ export function TimelineSection() {
             THE JOURNEY
           </h2>
           <p className="font-mono-ud font-black text-lg mt-4 bg-black text-[#d4ff00] dark:bg-[#d4ff00] dark:text-black inline-block px-6 py-2 border-4 border-black dark:border-white shadow-[6px_6px_0_#ff4d4d] rotate-1">
-            Tujuh tahun. Tujuh musim. Satu orbit.
+            Dari SMK Infokom Bogor ke konstanta digital.
           </p>
         </div>
 

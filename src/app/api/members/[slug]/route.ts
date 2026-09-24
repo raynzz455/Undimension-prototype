@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, isDbConfigured } from "@/lib/db";
 import { MEMBERS } from "@/lib/undimension/data";
 import { requireChaosMode } from "@/lib/chaos-auth";
+import { cleanText, sanitizeText } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -125,10 +126,11 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ slug: strin
   // NOTE: bioPortfolio is EXCLUDED from stringFields + handled separately
   // below. This prevents the ENTIRE update from failing if the bioPortfolio
   // column doesn't exist in the DB (migration 0006 not run yet).
+  // All fields use sanitizeText → null bytes (0x00) stripped (22021 fix).
   const data: Record<string, unknown> = {};
   const stringFields = ["name", "nick", "role", "img", "color", "highlight", "bio", "tagline", "quote", "element", "joinYear", "taglineCareer", "location", "availability"];
   for (const f of stringFields) {
-    if (body[f] !== undefined) data[f] = String(body[f]).trim().slice(0, 2000);
+    if (body[f] !== undefined) data[f] = sanitizeText(cleanText(body[f], 2000));
   }
   if (body.stats !== undefined) data.statsJson = JSON.stringify(body.stats);
   if (body.socials !== undefined) data.socialsJson = JSON.stringify(body.socials);
@@ -154,7 +156,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ slug: strin
     try {
       updated = await db.member.update({
         where: { slug },
-        data: { bioPortfolio: String(body.bioPortfolio).trim().slice(0, 2000) },
+        data: { bioPortfolio: sanitizeText(cleanText(body.bioPortfolio, 2000)) },
       });
     } catch (e) {
       console.warn(`[PUT /api/members/${slug}] bioPortfolio update skipped (column may not exist):`, e instanceof Error ? e.message : e);

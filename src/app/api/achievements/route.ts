@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, isDbConfigured, dbRetry } from "@/lib/db";
 import { requireChaosMode } from "@/lib/chaos-auth";
-import { rateLimit, getClientIP } from "@/lib/rate-limit";
+import { rateLimit, getClientIP, cleanText, sanitizeText } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -43,10 +43,10 @@ export async function POST(req: NextRequest) {
   if (!rl.allowed) return NextResponse.json({ error: "Rate limit exceeded." }, { status: 429, headers: { "Retry-After": String(rl.retryAfter) } });
   try {
     const body = await req.json();
-    const title = String(body.title || "").trim().slice(0, 100);
-    const year = String(body.year || String(new Date().getFullYear()));
-    const description = String(body.description || "").trim().slice(0, 500);
-    const memberId = String(body.memberId || "aldi").trim().slice(0, 50);
+    const title = sanitizeText(cleanText(body.title, 100));
+    const year = cleanText(body.year || String(new Date().getFullYear()), 10);
+    const description = sanitizeText(cleanText(body.description, 500));
+    const memberId = cleanText(body.memberId || "aldi", 50);
     if (!title || !description) return NextResponse.json({ error: "Title dan description wajib diisi." }, { status: 400 });
     const achievement = await db.achievement.create({ data: { title, year, description, memberId } });
     return NextResponse.json({ id: achievement.id, ...achievement, images: [] });

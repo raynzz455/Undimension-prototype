@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireChaosMode } from "@/lib/chaos-auth";
 import { db, isDbConfigured } from "@/lib/db";
-import { rateLimit, getClientIP, sanitizeText } from "@/lib/rate-limit";
+import { rateLimit, getClientIP, sanitizeText, cleanText } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     const author = sanitizeText(String(body.author || "THE COLLECTIVE"))
       .slice(0, 30)
       .toUpperCase();
-    const img = body.img ? String(body.img).slice(0, 500) : null;
+    const img = body.img ? cleanText(body.img, 500) : null;
 
     if (!title || !text) {
       return NextResponse.json({ error: "Title dan body wajib diisi." }, { status: 400 });

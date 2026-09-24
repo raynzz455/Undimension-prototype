@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, isDbConfigured } from "@/lib/db";
 import { requireChaosMode } from "@/lib/chaos-auth";
+import { cleanText } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
 
   try {
     const body = await req.json();
-    const historyId = String(body.historyId || "");
+    const historyId = cleanText(body.historyId, 100);
 
     if (!historyId) {
       return NextResponse.json({ error: "historyId wajib diisi." }, { status: 400 });

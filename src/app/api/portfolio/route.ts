@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, isDbConfigured, dbRetry } from "@/lib/db";
 import { PORTFOLIO_PROJECTS } from "@/lib/undimension/data";
 import { requireChaosMode } from "@/lib/chaos-auth";
-import { rateLimit, getClientIP } from "@/lib/rate-limit";
+import { rateLimit, getClientIP, cleanText, sanitizeText } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -36,16 +36,16 @@ export async function POST(req: NextRequest) {
   if (!rl.allowed) return NextResponse.json({ error: "Rate limit exceeded." }, { status: 429, headers: { "Retry-After": String(rl.retryAfter) } });
   try {
     const body = await req.json();
-    const title = String(body.title || "").trim().slice(0, 80);
-    const description = String(body.description || "").trim().slice(0, 500);
-    const tech = Array.isArray(body.tech) ? body.tech.map(String).slice(0, 10) : [];
-    const category = String(body.category || "OTHER").trim().slice(0, 20).toUpperCase();
-    const status = String(body.status || "WIP").trim().slice(0, 20).toUpperCase();
-    const year = String(body.year || String(new Date().getFullYear()));
-    const memberId = String(body.memberId || "aldi").trim().slice(0, 50);
-    const link = body.link ? String(body.link).slice(0, 500) : null;
-    const repo = body.repo ? String(body.repo).slice(0, 500) : null;
-    const color = String(body.color || "#ff4d4d").slice(0, 20);
+    const title = sanitizeText(cleanText(body.title, 80));
+    const description = sanitizeText(cleanText(body.description, 500));
+    const tech = Array.isArray(body.tech) ? body.tech.map((t) => cleanText(t, 100)).slice(0, 10) : [];
+    const category = cleanText(body.category || "OTHER", 20).toUpperCase();
+    const status = cleanText(body.status || "WIP", 20).toUpperCase();
+    const year = cleanText(body.year || String(new Date().getFullYear()), 10);
+    const memberId = cleanText(body.memberId || "aldi", 50);
+    const link = body.link ? cleanText(body.link, 500) : null;
+    const repo = body.repo ? cleanText(body.repo, 500) : null;
+    const color = cleanText(body.color || "#ff4d4d", 20);
     if (!title || !description) return NextResponse.json({ error: "Title dan description wajib diisi." }, { status: 400 });
     const project = await db.portfolioProject.create({ data: { title, description, techJson: JSON.stringify(tech), category, status, year, memberId, link, repo, color } });
     return NextResponse.json({ id: project.id, ...project, tech: JSON.parse(project.techJson) });

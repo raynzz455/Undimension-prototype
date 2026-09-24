@@ -88,13 +88,31 @@ export function getClientIP(req: Request): string {
  * React's default text rendering, but stripping on the server prevents
  * accidentally storing raw HTML that could be re-rendered elsewhere (e.g.
  * in admin tools, RSS feeds, or future Markdown renderers).
+ *
+ * Also strips null bytes (0x00) which cause `22021: invalid byte sequence
+ * for encoding "UTF8"` Postgres errors when pasted into text columns.
  */
 export function sanitizeText(input: string): string {
   return input
+    .replace(/\0/g, "") // strip null bytes (causes 22021 Postgres error)
     .replace(/<[^>]*>/g, "") // strip HTML tags
     .replace(/javascript:/gi, "") // strip javascript: URIs
     .replace(/on\w+\s*=\s*"[^"]*"/gi, "") // strip inline event handlers
     .replace(/on\w+\s*=\s*'[^']*'/gi, "")
     .replace(/on\w+\s*=\s*[^\s>]+/gi, "")
     .trim();
+}
+
+/**
+ * Light-weight text cleaner for fields that don't need HTML stripping
+ * (URLs, IDs, slugs, years, enums). Strips null bytes + trims + slices.
+ *
+ * Use this for routes that bypass `sanitizeText` to avoid the inline
+ * `String(x).trim().slice(N)` pattern that misses null-byte sanitization.
+ */
+export function cleanText(input: unknown, maxLen?: number): string {
+  let out = String(input ?? "");
+  out = out.replace(/\0/g, "").trim();
+  if (typeof maxLen === "number" && maxLen > 0) out = out.slice(0, maxLen);
+  return out;
 }

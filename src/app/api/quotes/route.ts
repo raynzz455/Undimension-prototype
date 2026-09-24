@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, isDbConfigured, dbRetry } from "@/lib/db";
 import { RANDOM_QUOTES } from "@/lib/undimension/data";
 import { requireChaosMode } from "@/lib/chaos-auth";
-import { rateLimit, getClientIP } from "@/lib/rate-limit";
+import { rateLimit, getClientIP, cleanText, sanitizeText } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -33,8 +33,8 @@ export async function POST(req: NextRequest) {
   if (!rl.allowed) return NextResponse.json({ error: "Rate limit exceeded." }, { status: 429, headers: { "Retry-After": String(rl.retryAfter) } });
   try {
     const body = await req.json();
-    const text = String(body.text || "").trim().slice(0, 500);
-    const author = String(body.author || "THE COLLECTIVE").trim().slice(0, 50);
+    const text = sanitizeText(cleanText(body.text, 500));
+    const author = cleanText(body.author || "THE COLLECTIVE", 50);
     if (!text) return NextResponse.json({ error: "Text wajib diisi." }, { status: 400 });
     const quote = await db.quote.create({ data: { text, author } });
     return NextResponse.json({ id: quote.id, text: quote.text, author: quote.author, order: quote.order });

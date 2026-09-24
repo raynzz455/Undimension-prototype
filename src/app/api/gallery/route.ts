@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, isDbConfigured, dbRetry } from "@/lib/db";
 import { GALLERY_PHOTOS } from "@/lib/undimension/data";
 import { requireChaosMode } from "@/lib/chaos-auth";
+import { cleanText } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -38,10 +39,10 @@ export async function PUT(req: NextRequest) {
     if (!id) return NextResponse.json({ error: "ID wajib diisi." }, { status: 400 });
     if (id.startsWith("g") && id.length <= 3) return NextResponse.json({ error: "Foto statis tidak bisa diedit." }, { status: 400 });
     const data: Record<string, string> = {};
-    if (title !== undefined) data.title = String(title).trim().slice(0, 40);
-    if (author !== undefined) data.author = String(author).trim().slice(0, 40).toUpperCase();
-    if (date !== undefined) data.date = String(date);
-    if (rotate !== undefined) data.rotate = String(rotate);
+    if (title !== undefined) data.title = cleanText(title, 40);
+    if (author !== undefined) data.author = cleanText(author, 40).toUpperCase();
+    if (date !== undefined) data.date = cleanText(date, 20);
+    if (rotate !== undefined) data.rotate = cleanText(rotate, 10);
     const updated = await db.galleryPhoto.update({ where: { id }, data });
     return NextResponse.json({ id: updated.id, img: updated.img, title: updated.title, author: updated.author, date: updated.date, rotate: updated.rotate });
   } catch (e) { return NextResponse.json({ error: "Gagal update foto." }, { status: 500 }); }

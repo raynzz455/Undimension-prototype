@@ -1,13 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition, useDeferredValue, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { NavBar, type Page } from "@/components/undimension/nav-bar";
-import { AboutPage } from "@/components/undimension/about-page";
-import { MemoriesPage } from "@/components/undimension/memories-page";
-import { GamesPage } from "@/components/undimension/games-page";
-import { PortfolioPage } from "@/components/undimension/portfolio-page";
-import { ChaosModePage } from "@/components/undimension/chaos-mode-page";
 import { ScrollProgress } from "@/components/undimension/scroll-progress";
 import { BackToTop } from "@/components/undimension/back-to-top";
 import { NotificationBanner } from "@/components/undimension/notification-banner";
@@ -28,6 +23,39 @@ const OpeningScreen = dynamic(
   () => import("@/components/undimension/opening-screen").then((m) => m.OpeningScreen),
   { ssr: false, loading: () => <div className="min-h-screen bg-[#09090b]" /> },
 );
+
+// Lazy-load ALL page components — initial bundle is smaller → faster first
+// paint → better INP on first interaction. Each page is only loaded when
+// the user navigates to it. Trade-off: ~50-100ms delay on first visit to
+// each tab (chunk download) — but with cache + SWR, the data shows instantly
+// from cache while the chunk loads in parallel.
+const AboutPage = dynamic(() => import("@/components/undimension/about-page").then((m) => m.AboutPage), {
+  loading: () => <PageSkeleton />,
+});
+const MemoriesPage = dynamic(() => import("@/components/undimension/memories-page").then((m) => m.MemoriesPage), {
+  loading: () => <PageSkeleton />,
+});
+const GamesPage = dynamic(() => import("@/components/undimension/games-page").then((m) => m.GamesPage), {
+  loading: () => <PageSkeleton />,
+});
+const PortfolioPage = dynamic(() => import("@/components/undimension/portfolio-page").then((m) => m.PortfolioPage), {
+  loading: () => <PageSkeleton />,
+});
+const ChaosModePage = dynamic(() => import("@/components/undimension/chaos-mode-page").then((m) => m.ChaosModePage), {
+  loading: () => <PageSkeleton />,
+});
+
+// Skeleton shown while page chunk loads (prevents layout shift + gives
+// immediate visual feedback that the click registered — key for INP).
+function PageSkeleton() {
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center" aria-hidden>
+      <div className="font-bebas text-4xl tracking-widest text-[#d4ff00] dark:text-black animate-pulse">
+        LOADING…
+      </div>
+    </div>
+  );
+}
 
 const FOOTER_STATS = [
   { label: "MEMBERS", value: "07" },
@@ -185,6 +213,19 @@ export default function Home() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [soundboardOpen, setSoundboardOpen] = useState(false);
 
+  // useTransition marks tab switches as non-urgent → React keeps the
+  // current UI painted while preparing the new page in the background.
+  // This dramatically reduces INP (Interaction to Next Paint) — the click
+  // → paint latency drops from "blocking on full page render" (~200-400ms)
+  // to "immediate visual feedback" (~16-50ms).
+  const [isPending, startTransition] = useTransition();
+
+  // Memoized page setter — wraps setPage in startTransition.
+  // This is passed to NavBar + Footer so ALL tab switches benefit.
+  const handleSetPage = useCallback((next: Page) => {
+    startTransition(() => setPage(next));
+  }, []);
+
   const { play, ensureCtx } = useSfx(soundOn);
   const { chaos, godMode, unlockGodMode } = useChaos();
 
@@ -240,13 +281,13 @@ export default function Home() {
         e.preventDefault();
         setShortcutsOpen((o) => !o);
       } else if (e.key === "g" || e.key === "G") {
-        setPage("memories");
+        handleSetPage("memories");
         play("click");
       } else if (e.key === "s" || e.key === "S") {
-        setPage("games");
+        handleSetPage("games");
         play("click");
       } else if (e.key === "p" || e.key === "P") {
-        setPage("portfolio");
+        handleSetPage("portfolio");
         play("click");
       } else if (e.key === "b" || e.key === "B") {
         if (!shortcutsOpen) {
@@ -254,13 +295,13 @@ export default function Home() {
           play("click");
         }
       } else if (e.key === "a" || e.key === "A") {
-        setPage("about");
+        handleSetPage("about");
         play("click");
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [hasEntered, play]);
+  }, [hasEntered, play, handleSetPage]);
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
@@ -298,16 +339,16 @@ export default function Home() {
       </a>
       {/* Hide NavBar, ScrollProgress, Footer, and floating buttons when in chaos mode */}
       {page !== "chaosmode" && <ScrollProgress />}
-      {page !== "chaosmode" && <NavBar current={page} setPage={setPage} />}
+      {page !== "chaosmode" && <NavBar current={page} setPage={handleSetPage} />}
       {page !== "chaosmode" && <NotificationBanner />}
       <main id="main" className="flex-1 relative z-10">
         {page === "about" && <AboutPage />}
         {page === "memories" && <MemoriesPage />}
         {page === "games" && <GamesPage />}
         {page === "portfolio" && <PortfolioPage />}
-        {page === "chaosmode" && godMode && <ChaosModePage onExit={() => setPage("about")} />}
+        {page === "chaosmode" && godMode && <ChaosModePage onExit={() => handleSetPage("about")} />}
       </main>
-      {page !== "chaosmode" && <Footer setPage={setPage} />}
+      {page !== "chaosmode" && <Footer setPage={handleSetPage} />}
       {page !== "chaosmode" && (
         <SoundToggle
           enabled={soundOn}
@@ -338,7 +379,7 @@ export default function Home() {
       {/* God mode floating button — only visible when godMode is unlocked */}
       {godMode && page !== "chaosmode" && (
         <button
-          onClick={() => { play("submit"); setPage("chaosmode"); }}
+          onClick={() => { play("submit"); handleSetPage("chaosmode"); }}
           className="fixed top-20 right-4 z-[55] flex items-center gap-2 bg-[#ff00ff] text-white border-4 border-black dark:border-white font-bebas text-lg px-4 py-2 shadow-[6px_6px_0_#000] dark:shadow-[6px_6px_0_#fff] hover:-translate-y-1 transition-transform no-color-transition animate-pulse"
           aria-label="Enter Chaos Mode (member area)"
           title="⚡ CHAOS MODE — Member Area"

@@ -20,9 +20,13 @@ export async function GET() {
   // This lets users replace the static seed data by uploading their own photos.
   // If DB has 0 photos (or unconfigured), return static GALLERY_PHOTOS as fallback.
   if (dbPhotos.length > 0) {
-    return NextResponse.json({ photos: dbPhotos, count: dbPhotos.length });
+    return NextResponse.json({ photos: dbPhotos, count: dbPhotos.length }, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+    });
   }
-  return NextResponse.json({ photos: GALLERY_PHOTOS, count: GALLERY_PHOTOS.length });
+  return NextResponse.json({ photos: GALLERY_PHOTOS, count: GALLERY_PHOTOS.length }, {
+    headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+  });
 }
 
 export async function PUT(req: NextRequest) {

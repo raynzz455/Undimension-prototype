@@ -8,7 +8,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   if (!isDbConfigured()) {
-    return NextResponse.json({ projects: PORTFOLIO_PROJECTS, count: PORTFOLIO_PROJECTS.length });
+    return NextResponse.json({ projects: PORTFOLIO_PROJECTS, count: PORTFOLIO_PROJECTS.length }, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+    });
   }
   try {
     const rows = await dbRetry(() => db.portfolioProject.findMany({ orderBy: [{ year: "desc" }, { createdAt: "desc" }] }));
@@ -18,7 +20,9 @@ export async function GET() {
       year: p.year, author: "", memberId: p.memberId, link: p.link, repo: p.repo, color: p.color,
     }));
     const merged = [...projects, ...PORTFOLIO_PROJECTS];
-    return NextResponse.json({ projects: merged, count: merged.length });
+    return NextResponse.json({ projects: merged, count: merged.length }, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+    });
   } catch (e) {
     console.warn("[GET /api/portfolio] DB unavailable, returning 503.", e instanceof Error ? e.message : e);
     return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });

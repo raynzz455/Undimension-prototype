@@ -49,12 +49,16 @@ function mapMember(m: {
 
 export async function GET() {
   if (!isDbConfigured()) {
-    return NextResponse.json({ members: MEMBERS });
+    return NextResponse.json({ members: MEMBERS }, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+    });
   }
   try {
     const members = await dbRetry(() => db.member.findMany({ orderBy: { order: "asc" } }));
     const data = members.map(mapMember);
-    return NextResponse.json({ members: data });
+    return NextResponse.json({ members: data }, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+    });
   } catch (e) {
     // DB failure: return 503 so the frontend KEEPS previous data
     // (useFetch keeps old data on 503). Don't return static fallback

@@ -12,7 +12,9 @@ export async function GET(req: NextRequest) {
   const gameId = searchParams.get("gameId");
   try {
     const compat = await db.gameCompatibility.findMany(gameId ? { where: { gameId } } : undefined);
-    return NextResponse.json({ compat });
+    return NextResponse.json({ compat }, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+    });
   } catch (e) {
     console.warn("[GET /api/games/compatibility] DB unavailable, returning 503.", e instanceof Error ? e.message : e);
     return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });

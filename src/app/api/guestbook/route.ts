@@ -20,7 +20,9 @@ export async function GET() {
   // Try the database; if it fails (e.g. not pushed / seeded yet),
   // return an empty list so the frontend never 500s.
   if (!isDbConfigured()) {
-    return NextResponse.json({ entries: [], count: 0 });
+    return NextResponse.json({ entries: [], count: 0 }, {
+      headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120" },
+    });
   }
   try {
     const entries = await db.guestbookEntry.findMany({
@@ -38,10 +40,14 @@ export async function GET() {
         createdAt: e.createdAt.toISOString(),
       })),
       count: entries.length,
+    }, {
+      headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120" },
     });
   } catch (e) {
     console.warn("[GET /api/guestbook] DB unavailable, returning empty list.", e instanceof Error ? e.message : e);
-    return NextResponse.json({ entries: [], count: 0 });
+    return NextResponse.json({ entries: [], count: 0 }, {
+      headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120" },
+    });
   }
 }
 

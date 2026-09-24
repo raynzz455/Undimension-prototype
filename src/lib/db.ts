@@ -19,15 +19,12 @@ const globalForPrisma = globalThis as unknown as {
  * Setting `pgbouncer=true` on the URL tells Prisma (>= 5.0) to DISABLE
  * prepared statements, eliminating the collisions.
  *
- * `connection_limit=1` is added ONLY for pooler URLs (serverless-friendly:
- * each function instance opens at most 1 backend connection, preventing pool
- * exhaustion on the Supabase free tier).
- *
- * If the user already set these params in their env, we don't touch them.
- * If the URL is a direct connection (port 5432, no `pooler.supabase.com`),
- * we still add `pgbouncer=true` (safe — just disables prepared statements
- * client-side) but skip `connection_limit=1` (would be too restrictive for
- * long-running local dev servers).
+ * NOTE: We do NOT set `connection_limit=1` — it was tried before and caused
+ * severe slowness because it serialized ALL concurrent queries through 1
+ * connection. About-page fires 6+ useFetch calls in parallel; with limit=1
+ * they all queue up → page takes seconds to load on mobile.
+ * Prisma's default pool size (num_cpus * 2 + 1, usually 5-9) is fine —
+ * Vercel serverless instances are short-lived and rarely hit that limit.
  */
 function buildDbUrl(): string | undefined {
   const url = process.env.DATABASE_URL
@@ -35,18 +32,12 @@ function buildDbUrl(): string | undefined {
   const sep = url.includes('?') ? '&' : '?'
   let out = url
 
-  // Always ensure pgbouncer=true so Prisma disables prepared statements.
+  // Ensure pgbouncer=true so Prisma disables prepared statements.
+  // Safe on both Transaction pooler (6543) and Session pooler (5432) —
+  // on Session pooler it just disables prepared statements client-side,
+  // which is harmless (slightly less query-plan caching).
   if (!out.includes('pgbouncer=')) {
     out += `${sep}pgbouncer=true`
-  }
-
-  // For Supabase pooler URLs only — limit to 1 connection per instance
-  // (serverless-friendly, prevents pool exhaustion).
-  if (
-    out.includes('pooler.supabase.com') &&
-    !out.includes('connection_limit=')
-  ) {
-    out += out.includes('?') ? '&connection_limit=1' : '?connection_limit=1'
   }
 
   return out

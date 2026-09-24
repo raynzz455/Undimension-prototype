@@ -18,7 +18,9 @@ export async function GET(req: NextRequest) {
       where: { gameId },
       orderBy: { order: "asc" },
     });
-    return NextResponse.json({ moments });
+    return NextResponse.json({ moments }, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+    });
   } catch (e) {
     console.warn("[GET /api/games/moments] DB unavailable, returning 503.", e instanceof Error ? e.message : e);
     return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });

@@ -9,13 +9,17 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   if (!isDbConfigured()) {
     const staticQuotes = RANDOM_QUOTES.map((q, i) => ({ id: `static-${i}`, ...q, order: i }));
-    return NextResponse.json({ quotes: staticQuotes, count: staticQuotes.length });
+    return NextResponse.json({ quotes: staticQuotes, count: staticQuotes.length }, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+    });
   }
   try {
     const rows = await dbRetry(() => db.quote.findMany({ orderBy: { order: "asc" } }));
     const quotes = rows.map((q) => ({ id: q.id, text: q.text, author: q.author, order: q.order }));
     const merged = quotes.length > 0 ? quotes : RANDOM_QUOTES.map((q, i) => ({ id: `static-${i}`, ...q, order: i }));
-    return NextResponse.json({ quotes: merged, count: merged.length });
+    return NextResponse.json({ quotes: merged, count: merged.length }, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+    });
   } catch (e) {
     console.warn("[GET /api/quotes] DB unavailable, returning 503.", e instanceof Error ? e.message : e);
     return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });

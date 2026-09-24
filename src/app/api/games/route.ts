@@ -9,34 +9,37 @@ export const dynamic = "force-dynamic";
 // GET /api/games — list all games (from DB if configured, fallback to static GAMES)
 export async function GET() {
   if (!isDbConfigured()) {
-    return NextResponse.json({ games: GAMES });
+    return NextResponse.json({ games: GAMES }, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+    });
   }
   try {
-    const games = await dbRetry(() => db.game.findMany({ orderBy: { order: "asc" } }));
-    if (games.length === 0) return NextResponse.json({ games: GAMES });
-    // Expand each game with its moments (for the carousel)
-    const expanded = await Promise.all(
-      games.map(async (g) => {
-        const moments = await dbRetry(() => db.gameMoment.findMany({
-          where: { gameId: g.gameId },
-          orderBy: { order: "asc" },
-        }));
-        return {
-          id: g.gameId,
-          sector: g.sector,
-          title: g.title,
-          subtitle: g.subtitle,
-          description: g.description,
-          bg: g.bgImg,
-          accent: g.accent,
-          carouselTitle: g.carouselTitle,
-          reverse: g.reverse,
-          fontClass: g.fontClass || undefined,
-          images: moments.map((m) => m.img),
-        };
-      }),
-    );
-    return NextResponse.json({ games: expanded });
+    // Single query with `include` — fetches games + their moments in 1 round-trip.
+    // (Was: 1 query for games + N queries for moments via Promise.all(map) = N+1.
+    // With N=6 games that's 7 queries, and on connection_limit=1 they all queued.)
+    const games = await dbRetry(() => db.game.findMany({
+      orderBy: { order: "asc" },
+      include: { moments: { orderBy: { order: "asc" }, select: { img: true } } },
+    }));
+    if (games.length === 0) return NextResponse.json({ games: GAMES }, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+    });
+    const expanded = games.map((g) => ({
+      id: g.gameId,
+      sector: g.sector,
+      title: g.title,
+      subtitle: g.subtitle,
+      description: g.description,
+      bg: g.bgImg,
+      accent: g.accent,
+      carouselTitle: g.carouselTitle,
+      reverse: g.reverse,
+      fontClass: g.fontClass || undefined,
+      images: g.moments.map((m) => m.img),
+    }));
+    return NextResponse.json({ games: expanded }, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+    });
   } catch (e) {
     console.warn("[GET /api/games] DB unavailable, returning 503.", e instanceof Error ? e.message : e);
     return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });

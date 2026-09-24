@@ -12,7 +12,9 @@ export async function GET(req: NextRequest) {
   const memberId = searchParams.get("memberId");
   try {
     const characters = await db.dnDCharacter.findMany(memberId ? { where: { memberId } } : undefined);
-    return NextResponse.json({ characters });
+    return NextResponse.json({ characters }, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+    });
   } catch (e) {
     console.warn("[GET /api/games/dnd-characters] DB unavailable, returning 503.", e instanceof Error ? e.message : e);
     return NextResponse.json({ error: "DB temporarily unavailable" }, { status: 503 });

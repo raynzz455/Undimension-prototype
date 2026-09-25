@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { db, isDbConfigured, dbRetry } from "@/lib/db";
 import { requireChaosMode } from "@/lib/chaos-auth";
 import { rateLimit, getClientIP, cleanText, sanitizeText } from "@/lib/rate-limit";
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
     const memberId = cleanText(body.memberId || "aldi", 50);
     if (!title || !description) return NextResponse.json({ error: "Title dan description wajib diisi." }, { status: 400 });
     const achievement = await db.achievement.create({ data: { title, year, description, memberId } });
+    try { revalidatePath("/api/achievements"); } catch {}
     return NextResponse.json({ id: achievement.id, ...achievement, images: [] });
   } catch (e) { return NextResponse.json({ error: "Gagal membuat achievement." }, { status: 500 }); }
 }
@@ -63,6 +65,7 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID wajib diisi" }, { status: 400 });
     await db.achievement.delete({ where: { id } });
+    try { revalidatePath("/api/achievements"); } catch {}
     return NextResponse.json({ success: true, id });
   } catch (e) { return NextResponse.json({ error: "Gagal menghapus achievement." }, { status: 500 }); }
 }

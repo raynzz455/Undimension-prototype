@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { db, isDbConfigured, dbRetry } from "@/lib/db";
 import { RANDOM_QUOTES } from "@/lib/undimension/data";
 import { requireChaosMode } from "@/lib/chaos-auth";
@@ -37,6 +38,7 @@ export async function POST(req: NextRequest) {
     const author = cleanText(body.author || "THE COLLECTIVE", 50);
     if (!text) return NextResponse.json({ error: "Text wajib diisi." }, { status: 400 });
     const quote = await db.quote.create({ data: { text, author } });
+    try { revalidatePath("/api/quotes"); } catch {}
     return NextResponse.json({ id: quote.id, text: quote.text, author: quote.author, order: quote.order });
   } catch (e) { return NextResponse.json({ error: "Gagal membuat quote." }, { status: 500 }); }
 }
@@ -52,6 +54,7 @@ export async function DELETE(req: NextRequest) {
     if (!id) return NextResponse.json({ error: "ID wajib diisi" }, { status: 400 });
     if (id.startsWith("static-")) return NextResponse.json({ error: "Static quote tidak bisa dihapus" }, { status: 400 });
     await db.quote.delete({ where: { id } });
+    try { revalidatePath("/api/quotes"); } catch {}
     return NextResponse.json({ success: true, id });
   } catch (e) { return NextResponse.json({ error: "Gagal menghapus quote." }, { status: 500 }); }
 }

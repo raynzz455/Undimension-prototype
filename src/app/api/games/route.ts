@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { db, isDbConfigured, dbRetry } from "@/lib/db";
 import { requireChaosMode } from "@/lib/chaos-auth";
 import { rateLimit, getClientIP, sanitizeText } from "@/lib/rate-limit";
@@ -95,6 +96,7 @@ export async function POST(req: NextRequest) {
         order: Number(body.order) || 0,
       },
     });
+    try { revalidatePath("/api/games"); } catch {}
     return NextResponse.json({ game });
   } catch (e) {
     return NextResponse.json(

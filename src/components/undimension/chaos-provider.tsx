@@ -6,6 +6,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
 
@@ -75,18 +76,24 @@ export function ChaosProvider({ children }: { children: ReactNode }) {
   const [chaos, setChaos] = useState(false);
   const [godMode, setGodMode] = useState(false);
   const [palette, setPalette] = useState<Record<string, string>>(DEFAULT_PALETTE);
-  // Session-only flag — NOT persisted to localStorage. Set when the user
-  // clicks the navbar shuffle (chaos toggle) ON. Stays true even when chaos
-  // is toggled OFF. Resets to false on page refresh.
+  // Persisted flag — survives page refresh + browser close. Set when the
+  // user clicks the navbar shuffle (chaos toggle) ON. Stays true even when
+  // chaos is toggled OFF. Only resets if user clears localStorage manually.
   // Used to show hidden members (like Nayla) — the condition is ONLY the
   // shuffle toggle, NOT the Konami code (godMode).
   const [naylaRevealed, setNaylaRevealed] = useState(false);
+
+  // Tracks whether the "Secret member appeared!" notification has fired
+  // in this session. Set to true on first fire OR on localStorage restore
+  // (so refresh doesn't re-fire the popup).
+  const hasNotifiedSecretRef = useRef(false);
 
   // Load persisted state — check if god mode expired
   useEffect(() => {
     const saved = localStorage.getItem("ud-chaos");
     const savedGod = localStorage.getItem("ud-godmode");
     const godExpiresAt = Number(localStorage.getItem("ud-godmode-expires") || "0");
+    const savedNayla = localStorage.getItem("ud-nayla-revealed");
     Promise.resolve().then(() => {
       if (saved === "1") {
         const savedPalette = localStorage.getItem("ud-chaos-palette");
@@ -108,6 +115,14 @@ export function ChaosProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem("ud-chaos");
         localStorage.removeItem("ud-chaos-palette");
         setChaos(false);
+      }
+      // Restore naylaRevealed from localStorage (persists across refresh +
+      // browser restart). Mark hasNotifiedSecretRef = true BEFORE setting
+      // state so the notification useEffect doesn't re-fire "Secret member
+      // appeared!" on every refresh.
+      if (savedNayla === "1") {
+        hasNotifiedSecretRef.current = true;
+        setNaylaRevealed(true);
       }
     });
   }, []);
@@ -185,20 +200,25 @@ export function ChaosProvider({ children }: { children: ReactNode }) {
         localStorage.setItem("ud-chaos-palette", JSON.stringify(p));
       }
       // When chaos is toggled ON, reveal hidden members (like Nayla).
-      // This flag is session-only (not persisted) — stays true even when
-      // chaos is toggled OFF. Resets on page refresh.
-      if (next) setNaylaRevealed(true);
+      // Persist to localStorage so it survives page refresh + browser close.
+      // Stays true even when chaos is toggled OFF — only manual localStorage
+      // clear (or browser dev tools) can reset.
+      if (next) {
+        setNaylaRevealed(true);
+        localStorage.setItem("ud-nayla-revealed", "1");
+      }
       return next;
     });
   }, [palette]);
 
   // Fire the 'secret member' notification ONCE when naylaRevealed goes
-  // from false to true (first reveal in this session). Subsequent shuffle
-  // toggles won't fire it again (naylaRevealed stays true).
+  // from false to true via user toggle. Skipped on hydration restore
+  // (so refresh doesn't re-fire "Secret member appeared" every time).
   // Uses useEffect (not inside the state updater) because React 18+
   // state updaters should be pure — no side effects like dispatchEvent.
   useEffect(() => {
-    if (naylaRevealed) {
+    if (naylaRevealed && !hasNotifiedSecretRef.current) {
+      hasNotifiedSecretRef.current = true;
       window.dispatchEvent(new CustomEvent("ud-notify-secret", {
         detail: { message: "Secret member appeared! Naye telah muncul." },
       }));

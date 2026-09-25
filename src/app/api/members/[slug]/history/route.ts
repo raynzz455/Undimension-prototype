@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { db, isDbConfigured } from "@/lib/db";
 import { requireChaosMode } from "@/lib/chaos-auth";
 import { cleanText } from "@/lib/rate-limit";
@@ -136,6 +137,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
         skillsJson: history.skillsJson,
       },
     });
+    try { revalidatePath("/api/members"); revalidatePath("/api/members/" + slug); } catch {}
 
     return NextResponse.json({
       success: true,

@@ -281,9 +281,16 @@ export function useFetch<T>(url: string, opts?: FetchOpts): State<T> {
 
       const fetchPromise = (async () => {
         try {
-          const res = await fetch(url, {
+          // When force=true (refetch called after mutation), add a cache-buster
+          // query param to bypass browser HTTP cache + Vercel edge cache.
+          // Without this, the browser might serve the cached response
+          // (Cache-Control: s-maxage=60) even after the admin's mutation,
+          // making it look like the update didn't apply.
+          const sep = url.includes("?") ? "&" : "?";
+          const finalUrl = force ? `${url}${sep}_t=${Date.now()}` : url;
+          const res = await fetch(finalUrl, {
             signal: ac.signal,
-            cache: "default",
+            cache: force ? "no-store" : "default",
             headers: { Accept: "application/json" },
           });
           if (!res.ok) {

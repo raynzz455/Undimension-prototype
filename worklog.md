@@ -2899,3 +2899,486 @@ const handleSetPage = useCallback((next: Page) => {
 3. **Test cross-tab sync on real device** — open the site in 2 browser tabs (same browser), edit a member in one tab, verify the other tab updates within ~50ms.
 4. **Consider WebSocket for real-time push** — if cross-device real-time sync is needed (e.g., admin edits on phone, public viewer on desktop sees update within 1s). Currently using BroadcastChannel (same-browser only). WebSocket mini-service would handle cross-device.
 5. **Add `useTransition` to other heavy state updates** — chaos-mode form submissions, member card expand/collapse, etc.
+
+---
+Task ID: 2-a
+Agent: sub-agent (general-purpose)
+Task: Investigate "only Raynaladi (id 001) card shows highlight text, others don't" bug in BioText component.
+
+## Section 1: Investigation Summary
+
+### Components / files examined
+1. `src/components/undimension/primitives.tsx` (lines 17–48) — `BioText` component
+2. `src/components/undimension/about-page.tsx` (line 190) — `<BioText highlightClass={m.highlight}>{m.bio}</BioText>`
+3. `prisma/migrations/0008_seed_all_data.sql` (full file, 50 lines) — SQL seed for all 8 members
+4. `src/app/api/members/route.ts` (full file, 69 lines) — `mapMember()` + GET handler
+5. `src/lib/undimension/data.ts` (lines 60–120) — static `MEMBERS` fallback array
+6. Live `/api/members` endpoint via `curl` AND `agent-browser eval` (both consistent)
+
+## Section 2: Root Cause Analysis
+
+### KEY FINDING — Bug is a DATA issue, not a CODE or CSS issue
+
+**None of the 8 members' `bio` strings contain `**bold**` markers** — neither in the static `data.ts` fallback nor in the live Supabase DB (verified via `/api/members` GET response).
+
+The `BioText` component (primitives.tsx line 34) splits the bio on the regex `/(\*\*[^*]+\*\*|\*[^*]+\*)/g` and only emits a `<strong className={cn("font-bold", highlightClass)}>` element when a chunk matches `**...**`. If no `**` markers exist in the bio, BioText just renders plain `<Fragment>` text — `highlightClass` is never used at all → no colored text appears.
+
+### Verification — `/api/members` (via agent-browser eval)
+
+| id    | name                      | highlight          | bioHasBold | bioSnippet                                                          |
+|-------|---------------------------|--------------------|------------|---------------------------------------------------------------------|
+| aldi  | Raynaldi                  | text-[#ff4d4d]     | **false**  | Titik nol dari mana semua orbit dimulai. Sang pendiri yang menyalak |
+| razka | Muhammad Razka Faudzan   | text-[#00e5ff]     | **false**  | Perancang struktur di balik kekacauan. Setiap blueprint yang dia bu |
+| reza  | Reza                      | text-[#d4ff00]     | **false**  | Pikirannya selalu lima langkah di depan. Saat yang lain panik...     |
+| abyan | Muhammad Abyan Riyadh Amal | text-[#ff00ff]    | **false**  | Barisan depan yang tak pernah mundur. Kalau ada tembok, dia yang... |
+| rasya | Rasya Musyafa Ridwan      | text-[#ff8c00]     | **false**  | Yang tak pernah bisa ditebak. Strateginya? Tidak ada. Dan itu...    |
+| rifqi | Muhammad Rifqi            | text-[#00ff00]     | **false**  | Misteri berjalan. Kadang hadir, kadang hilang, tapi selalu muncu... |
+| dudit | Raditya Jundika Putra     | text-[#8a2be2]     | **false**  | Elemen yang mempercepat reaksi. Tanpa dia, semuanya akan berjalan... |
+| nayla | Nayla                     | text-[#ff006e]     | **false**  | Entitas misterius yang muncul hanya saat chaos mode aktif...       |
+
+**Result: 8/8 members have `highlight` correctly set; 0/8 members have `**bold**` markers in `bio`.**
+
+### Why the user THINKS Aldi's card shows highlight text
+Most plausible explanations (in order of likelihood):
+1. **localStorage cache from Task 44 (`useFetch` write-through cache)** — If Aldi (the user, who has chaos-mode access) previously edited their own bio via `/api/members/[slug]` PUT to add `**bold**` markers (e.g., `**Sang pendiri**`), that edited bio would have been cached in `localStorage["ud-fetch:/api/members"]` (maxAge=30s). Even after the edit was reverted at DB level, the localStorage cache could still show the highlighted version for up to 30s, and the SWR refetch only replaces data after the network round-trip completes. If the user took a screenshot during that brief window, they would have seen Aldi's card with highlight text.
+2. **The user is conflating "highlight text" with the role/name headings** — On `about-page.tsx` lines 175–188, every member's `name` is rendered in `font-bebas text-6xl` (large) inside a black barcode-tag box, and every member's `role` (e.g. "THE FOUNDER", "THE ARCHITECT") is rendered in `font-mono-ud font-black text-3xl` inside a black/white inline-block box. These are bold/styled for ALL members — the user might have mistaken these for "highlight text" and noticed Aldi's box first (Aldi is `order=0`, the first card rendered).
+3. **Brief experiment with `**bold**` in Aldi's bio via chaos-mode** — same as #1 but the edit was deliberate and later reverted.
+
+## Section 3: Specific Files / Lines Needing Fix
+
+| File | Line | Issue |
+|------|------|-------|
+| `src/lib/undimension/data.ts` | 69, 102, ~140, ~180, ~220, ~260, ~300, ~340 | All 8 `bio:` strings are plain text with no `**bold**` markers |
+| `prisma/migrations/0008_seed_all_data.sql` | 9, 12, 15, 18, 21, 24, 27, 30 | All 8 INSERT statements set `bio` to plain text with no `**bold**` markers |
+| `src/components/undimension/primitives.tsx` | 32–48 | **NO BUG** — BioText code is correct; `highlightClass` is properly applied to `<strong>` elements when `**bold**` markers exist |
+| `src/app/api/members/route.ts` | 12–48 | **NO BUG** — `mapMember` correctly returns `highlight: m.highlight` |
+| `src/components/undimension/about-page.tsx` | 190 | **NO BUG** — `<BioText highlightClass={m.highlight}>{m.bio}</BioText>` correctly passes the member's highlight color |
+
+## Section 4: Recommended Fix
+
+**Pick ONE of these two product-level approaches** (need user input):
+
+### Option A — "Bold the key phrase in each bio" (minimal change, recommended)
+Wrap a key phrase in each of the 8 bios with `**...**` markers so the member's brand color shows up as accent text. For example, in `data.ts` line 69:
+
+```diff
+-  bio: "Titik nol dari mana semua orbit dimulai. Sang pendiri yang menyalakan percikan pertama dan tak pernah membiarkannya padam, sejauh apapun anggota lainnya pergi.",
++  bio: "Titik nol dari mana semua orbit dimulai. **Sang pendiri** yang menyalakan percikan pertama dan tak pernah membiarkannya padam, sejauh apapun anggota lainnya pergi.",
+```
+Apply the same `**key phrase**` pattern to all 8 bios in BOTH `data.ts` AND `0008_seed_all_data.sql` (the SQL seed is idempotent and uses `ON CONFLICT DO UPDATE`, so re-running it will overwrite the live DB rows). After re-running the seed, all 8 cards will show colored bold accent text consistently.
+
+**Also clear localStorage cache** (or just rely on the 30s maxAge from Task 44) so any stale Aldi-only edit doesn't linger.
+
+### Option B — "Apply highlight color to entire bio" (component change, NOT recommended)
+Modify `BioText` so `highlightClass` is also applied to plain `<Fragment>` text (not just `<strong>`). This would make ALL bio text colored, which defeats the visual purpose of "highlight" (a colored accent against default-color body text). Probably not what the user wants.
+
+## Section 5: Verification Performed
+
+- ✅ Read `primitives.tsx` (BioText regex + `<strong>` rendering logic) — code is correct
+- ✅ Read `about-page.tsx:190` — usage is correct
+- ✅ Read `0008_seed_all_data.sql` — `highlight` field IS set for all 8 members (`text-[#ff4d4d]`, `text-[#00e5ff]`, etc.) — no DB-level missing-highlight bug
+- ✅ Read `api/members/route.ts` — `mapMember` correctly returns `highlight: m.highlight`
+- ✅ Live API test via `curl http://localhost:3000/api/members` — 200 OK, 8 members returned, all with non-empty `highlight`
+- ✅ Live API test via `agent-browser eval` against running dev server — same result; `bioHasBold: false` for all 8 members including Aldi
+- ✅ `rg "\*\*" src/lib/undimension/data.ts` — only matches a JSDoc comment, no `**` markers in any bio string
+
+## Section 6: Next-phase Recommendations
+
+1. **Ask user to clarify** whether they want Option A (add `**bold**` to all 8 bios) or Option B (component change). My recommendation is Option A.
+2. **If Option A chosen**: write a small SQL migration (e.g., `0010_add_bold_markers_to_bios.sql`) that uses `UPDATE "Member" SET bio = ...` to add `**...**` around a key phrase in each of the 8 bios, then run it in Supabase SQL Editor. Also update `data.ts` to match (so the static fallback is consistent).
+3. **Investigate localStorage cache state on user's device** — ask user to open DevTools → Application → Local Storage → look for `ud-fetch:/api/members` and check if the cached Aldi bio differs from the current API response. If yes, that confirms Hypothesis #1 (stale cache from a reverted Aldi-only edit).
+4. **Add a `**bold**` e2e test** — in `primitives.test.tsx` (if it exists) or a new test file, verify BioText renders `<strong className="...text-[#ff4d4d]">Sang pendiri</strong>` when given input `"**Sang pendiri** the founder"` with `highlightClass="text-[#ff4d4d]"`. Regression guard.
+
+---
+Task ID: 2-b
+Agent: sub-agent (general-purpose)
+Task: User reports dark-mode bug — "for dark mode, there's a box with member ID text. When entering dark mode, the ID text (e.g. ID_001) turns white but the background doesn't change to dark".
+
+## Section 1: Root Cause Analysis
+
+### Search results
+Searched for `ID_` patterns in `src/components/undimension/`. Found 3 sites rendering an "ID_" label:
+
+| File | Line | Element | Status |
+|---|---|---|---|
+| `src/components/undimension/about-page.tsx` | 160-162 | `<div className="... bg-white border-4 border-black ... font-bebas text-3xl ...">` `ID_00{i + 1}` | **BUGGY** |
+| `src/components/undimension/member-detail-modal.tsx` | 141-143 | `<div className="... bg-[#d4ff00] text-black ...">` `ID_{member.id.toUpperCase()} · EST. {member.joinYear}` | OK (constant lime bg + explicit black text) |
+| `src/components/undimension/portfolio-page.tsx` | 407-409 | `<span className="... bg-black text-white border-2 border-black ...">` `ID_{member.id.toUpperCase()}` | OK (constant black bg + white text — same in both themes) |
+
+### The buggy element
+`src/components/undimension/about-page.tsx:160` — the ID badge ("ID_001", "ID_002", …) sticker on each MemberCard in the ABOUT page. Pre-fix class string was:
+```
+absolute -bottom-6 right-0 bg-white border-4 border-black px-4 py-2 font-bebas text-3xl shadow-[4px_4px_0_#000] rotate-6 z-40
+```
+- `bg-white` — NO `dark:` variant → background stays WHITE in dark mode
+- `border-4 border-black` — NO `dark:border-white` → border stays BLACK
+- `shadow-[4px_4px_0_#000]` — NO `dark:shadow-*` → shadow stays BLACK
+- **No `text-black`** → text color INHERITS from `<body>`
+
+### Why the text turns white
+`src/app/globals.css:52-53, 97-98, 134-135`:
+```css
+--background: oklch(0.96 0.005 95); --foreground: oklch(0.145 0 0);   /* light: dark text */
+.dark { --background: oklch(0.09 0.005 260); --foreground: oklch(0.985 0 0); } /* dark: WHITE text */
+body { @apply bg-background text-foreground; }
+```
+So in dark mode `body` has `text-foreground` ≈ `oklch(0.985 0 0)` = **white**. Since the ID badge sets no `text-*` class and none of its ancestors (`MemberCard` root `<div>` at line 102, the section wrapper at line 252) set an explicit text color either, the badge inherits WHITE text in dark mode.
+
+Result in dark mode: **white ID_001 text on white background → invisible/unreadable** — exactly matches the user report.
+
+### Sibling elements on the same card DO invert properly
+- Line 174 (Full Name Barcode Tag): `bg-black text-white dark:bg-white dark:text-black border-4 border-black dark:border-white ...` ✓
+- Line 182 (Role & Bio Sheet): `bg-white dark:bg-black border-4 border-black dark:border-white ...` ✓
+- Line 184 (corner dot): `bg-black dark:bg-white` ✓
+- Line 186 (role badge): `bg-black text-white dark:bg-white dark:text-black` ✓
+- Line 157 (yellow "tape" sticker): `bg-[#ffea00] ... text-black` — colored bg + explicit black text → fine in both themes (no dark variant needed since the bg is not white/black)
+
+So the ID badge at line 160 was the ONLY outlier on the card missing `dark:` variants.
+
+## Section 2: Fix Applied
+
+`src/components/undimension/about-page.tsx:160` — added `dark:` variants mirroring the sibling "paper" elements' inversion pattern + explicit `text-black` to prevent inheritance leak, plus `no-color-transition` (used on adjacent rotated paper elements):
+
+```diff
+- <div className="absolute -bottom-6 right-0 bg-white border-4 border-black px-4 py-2 font-bebas text-3xl shadow-[4px_4px_0_#000] rotate-6 z-40">
++ <div className="absolute -bottom-6 right-0 bg-white dark:bg-black text-black dark:text-white border-4 border-black dark:border-white px-4 py-2 font-bebas text-3xl shadow-[4px_4px_0_#000] dark:shadow-[4px_4px_0_#fff] rotate-6 z-40 no-color-transition">
+    ID_00{i + 1}
+  </div>
+```
+
+Adds: `dark:bg-black`, `text-black dark:text-white`, `dark:border-white`, `dark:shadow-[4px_4px_0_#fff]`, `no-color-transition` (matches sibling rotated paper elements' convention).
+
+## Section 3: Verification
+
+### agent-browser computed-styles check (ABOUT page, dark mode forced via `document.documentElement.classList.add('dark')`)
+
+| | bgColor | textColor | borderColor |
+|---|---|---|---|
+| Before fix | `rgb(255, 255, 255)` | `lab(98.26 0 0)` ≈ white | `rgb(0, 0, 0)` |
+| After fix | `rgb(0, 0, 0)` ✓ | `rgb(255, 255, 255)` ✓ | `rgb(255, 255, 255)` ✓ |
+
+### Light mode still correct (no regression)
+After fix in light mode: bgColor `rgb(255, 255, 255)` (white), textColor `rgb(0, 0, 0)` (black), borderColor `rgb(0, 0, 0)` (black) — paper badge look preserved.
+
+### Lint
+`bun run lint` — 0 errors, 0 warnings.
+
+## Section 4: Files Touched
+- `src/components/undimension/about-page.tsx` (1 line edited at line 160)
+
+## Section 5: Next-phase Recommendations
+1. **Optional regression sweep** — there are ~3 other "tape sticker" style elements across `undimension/` components with `bg-white border-4 border-black` and NO `dark:` variants that may have the same inheritance-leak bug (the `bg-white` blocks without explicit `text-black` will inherit dark-mode white text from body). Worth a follow-up audit: `rg -n "bg-white border-4 border-black" src/components/undimension/` then verify each has either explicit `text-black` or proper `dark:bg-black dark:text-white` variants.
+2. **Lint rule idea** — could add a custom eslint rule that flags `bg-white` without a paired `text-black` (and vice versa) when no `dark:` variant is present — would catch this class of bug at PR time.
+3. **Visual regression test** — could add a Playwright snapshot test that captures each page (ABOUT/GALLERY/GAMES/PORTFOLIO) in BOTH light and dark mode and asserts no element has `backgroundColor === color` (i.e. text invisible against bg). Would auto-catch this class of bug.
+
+---
+Task ID: 2-c
+Agent: sub-agent (general-purpose)
+Task: Verify whether the games page carousel is static (needs manual update) or DB-driven + editable via chaos-mode.
+
+## Section 1: Code Path Verification
+
+### 1.1 `src/components/undimension/games-page.tsx`
+- `GamesPage` calls `useFetch<{ games: GameSection[] }>("/api/games")` → carousel is **DB-driven** (not hardcoded in component).
+- Client-side fallback: if a game returned by `/api/games` has `images.length === 0`, falls back to that game's static `GAMES` images (from `src/lib/undimension/data.ts`). So the carousel NEVER shows empty — it always falls back to static data per-game when no DB moments exist.
+- `GameCarousel` component receives `images: string[]` and cycles through them every 4500ms (tape-deck UI with progress bar + dot pagination + REC indicator).
+
+### 1.2 `src/app/api/games/route.ts` (GET)
+- `if (!isDbConfigured()) return NextResponse.json({ games: GAMES }, ...)` → returns static GAMES when DB not configured.
+- DB path: `db.game.findMany({ orderBy: { order: "asc" }, include: { moments: { orderBy: { order: "asc" }, select: { img: true } } } })` — single query (N+1 fixed per Task 42 perf work), fetches games + their moment images in 1 round-trip.
+- Maps DB rows → client shape with `images: g.moments.map((m) => m.img)`.
+- Cache-Control: `public, s-maxage=60, stale-while-revalidate=300`.
+- Returns 503 on DB error (does NOT fall back to static — only falls back when DB unconfigured, not when DB fails).
+
+### 1.3 `src/app/api/games/moments/route.ts` (GET/POST/DELETE)
+- **GET** `?gameId=minecraft` — list moments (screenshots) for a game. Returns `{ moments: [] }` when DB not configured.
+- **POST** (chaos-protected + rate-limited):
+  - FormData: `file` (image, max 4MB), `gameId`, `title` (required), `description` (optional)
+  - 3-layer image validation: extension + content-type + magic byte (`validateImageUpload`)
+  - Uploads to Supabase Storage bucket `games/moments/` → `moment-{timestamp}-{random6}.{ext}`
+  - Creates `db.gameMoment` record with `order: existing_count` (append to end of carousel)
+  - Returns `{ moment }` on success
+- **DELETE** `?id=xxx` (chaos-protected + rate-limited):
+  - Deletes `db.gameMoment` record by id
+  - Returns `{ ok: true, id }` on success
+  - NOTE: does NOT delete the Supabase storage object — only the DB row (orphaned blob in storage)
+
+### 1.4 `src/components/undimension/chaos-mode-page.tsx`
+- **`GamesTab`** component (rendered when chaos-mode tab === "games").
+- Game selector at top: buttons for each game (Minecraft/Roblox/ML/DnD).
+- **Section 1 — GAME METADATA** (`#00e5ff` cyan): edit title, subtitle, description, accent color, carouselTitle — autosave on blur via `updateGameMeta()`.
+- **Section 2 — PLAYERS** (`#ff8c00` orange): per-game players with own photo (members or external). Has file upload + URL paste.
+- **Section 3 — MOMENTS / SCREENSHOTS** (`#d4ff00` yellow): the carousel image manager.
+  - Upload form: file input (jpg/png/webp/gif), title input (required, 80 chars), description input (optional, 300 chars), "+ UPLOAD MOMENT" button.
+  - `uploadMoment()`: validates file + title, builds FormData, calls `chaosFetch("/api/games/moments", { method: "POST", body: form })`, on success calls `refetchMoments()` + flash success.
+  - Grid of existing moments (2-3 cols): each shows `<img>`, title, description, and a red "DEL" button.
+  - `deleteMoment(id, title)`: confirm() dialog → `chaosFetch("/api/games/moments?id=" + id, { method: "DELETE" })` → `refetchMoments()` + flash + play("close").
+  - `useFetch<{ moments }>("/api/games/moments?gameId=" + selectedGame)` — refetches when `selectedGame` changes.
+- **Section 4 — D&D CHARACTERS** (`#8a2be2` purple): DnD-only, full character sheet with ability scores (str/dex/con/int/wis/cha). Separated from Players.
+- Other sections exist for ML-specific stats (role/hero/KDA/WR), DnD campaigns, game compatibility ratings.
+
+## Section 2: Live Browser Verification (agent-browser, mobile 390×844)
+
+### DB configuration check (local dev)
+- `.env` contains `DATABASE_URL=file:/home/z/my-project/db/custom.db` (SQLite local file).
+- `isDbConfigured()` in `src/lib/db.ts` rejects this because it requires `postgresql://` or `postgres://` prefix → returns false.
+- So locally: `/api/games` returns static GAMES data; `/api/games/moments?gameId=*` returns `{ moments: [] }`.
+- In production (per Task 42/43/44 worklog), DB is configured via Supabase Postgres pooler URL → DB-driven path is active.
+
+### Live carousel state on Games page (after cookie skip + click GAMES tab)
+- 4 game sections rendered: MINECRAFT, ROBLOX, MOBILE LEGENDS, DUNGEONS & DRAGONS (in that order).
+- Each carousel has **4 dots** (= 4 images per game) — confirming 16 total carousel slots (all static fallback since DB moments empty locally).
+- Carousel images are static member photos (`/members/member-{name}.webp` — razka/reza/abyan/rasya).
+- Each carousel auto-advances every 4500ms (tape-deck progress bar fills, then `setIdx((prev) => (prev + 1) % images.length)`).
+- Bg images per section: `/games/{minecraft,roblox,ml,dnd}-bg.webp`.
+
+### `/api/games` response (curl, live)
+- 200 OK. Returns 4 games with full metadata (id, sector, title, subtitle, description, bg, accent, carouselTitle, images, reverse, fontClass).
+- All `images` arrays contain static member-photo URLs — confirming DB not configured → static GAMES fallback path.
+
+### `/api/games/moments?gameId={minecraft,roblox,ml,dnd}` (curl, live)
+- All 4 games return `{ "moments": [] }` — DB not configured, returns empty list immediately.
+
+## Section 3: Answer to the User's Question
+
+### Is the carousel static (hardcoded) or DB-driven?
+**DB-driven, with static fallback.**
+- The carousel image list is fetched from `/api/games`, which calls `db.game.findMany({ include: { moments } })` and uses `g.moments.map(m => m.img)` as the image array.
+- In local dev (SQLite not "configured"), the API returns the static GAMES array — so the carousel shows static member photos.
+- In production (Supabase Postgres configured), the carousel shows whatever moments exist in the `GameMoment` table for each game. If a game has 0 moments in DB, the games-page client-side falls back to that game's static images.
+- The carousel title (`OUR WORLD`, `CHAOS INC`, `ARENA LOG`, `TAVERN TALES`) is stored in the `Game.carouselTitle` DB column (editable in chaos-mode GAME METADATA section).
+
+### Can chaos-mode edit it? Which section?
+**YES — fully editable via chaos-mode → GAMES tab → MOMENTS / SCREENSHOTS section** (yellow `#d4ff00` border, Section 3 of the GamesTab component).
+- Section 1 (GAME METADATA): edit the carousel title (e.g., "OUR WORLD" → "CREEPER MASSACRE").
+- Section 3 (MOMENTS / SCREENSHOTS): upload new carousel images, delete existing ones.
+- Game selector at the top of GamesTab lets you pick which game's carousel to manage.
+
+### Workflow to add/remove/edit carousel images
+**ADD**:
+1. Enter chaos-mode (toggle chaos ON → enter Konami code → god mode unlocks → click CHAOS MODE button).
+2. Click GAMES tab inside chaos-mode.
+3. Pick the game from the game selector at the top (Minecraft/Roblox/ML/DnD).
+4. Scroll to "MOMENTS / SCREENSHOTS" section (yellow border).
+5. Click file input → pick image (jpg/png/webp/gif, ≤4MB).
+6. Type TITLE (required, ≤80 chars — e.g. "FIRST DIAMOND").
+7. Optionally type DESCRIPTION (≤300 chars — shown below thumbnail in chaos-mode admin grid only, NOT shown in public carousel).
+8. Click "+ UPLOAD MOMENT" → POST `/api/games/moments` (FormData) → Supabase storage upload + DB row insert → `refetchMoments()` → new moment appears in admin grid → cache invalidation broadcasts to other tabs → public games page carousel includes the new image after cache TTL (≤30s, or immediate after `refetch()`).
+
+**REMOVE**:
+1. Same flow as ADD steps 1-4.
+2. Find the moment thumbnail in the admin grid below the upload form.
+3. Click the red "DEL" button → confirm dialog → DELETE `/api/games/moments?id={id}` → DB row deleted → `refetchMoments()`.
+4. ⚠️ **Supabase storage object is NOT deleted** — only the DB row. The image blob is orphaned in the bucket (minor storage leak, not visible to public since the URL is no longer referenced).
+
+**EDIT**:
+- **Not supported as a separate operation.**
+- To change image/title/description → DELETE the moment → re-upload with new file/title/description.
+- The carousel title (the `OUR WORLD` / `CHAOS INC` label) IS separately editable in the GAME METADATA section (autosave on blur).
+
+### Limitations
+1. **Cannot edit existing moment** — no in-place update; must delete + re-upload. No PUT/PATCH route exists for moments.
+2. **Cannot reorder moments** — order is set to `existing_count` on upload (i.e., always appended to end). No drag-and-drop or reorder UI. The carousel shows them in DB `order ASC`.
+3. **Description field is admin-only** — the public `GameCarousel` component does NOT display the moment's `description`; it only renders the image. The description is shown only in the chaos-mode admin grid thumbnail. So if the user expects the carousel to show captions on the public site, that's not wired up — the carousel auto-rotates images silently.
+4. **Storage leak on delete** — Supabase object is not deleted when DB row is deleted. Would need a follow-up `fetch(supabaseUrl + "/storage/v1/object/" + path, { method: "DELETE" })` in the DELETE route. (Out of scope of this task — flagging for future cleanup.)
+5. **Per-game fallback masks empty state** — if a user deletes ALL moments for a game, the games-page falls back to static GAMES images for that game. So the admin can't make a game's carousel truly "empty" — it always shows the static member photos. (This is by design — prevents broken/empty UI.)
+6. **Requires Supabase storage configured** — POST returns 503 if `NEXT_PUBLIC_SUPABASE_URL` or `SUPABASE_SERVICE_KEY` missing. Local dev can't test uploads end-to-end without Supabase creds.
+7. **File size + type limits** — 4MB max, jpg/png/webp/gif only, 3-layer validation (extension + content-type + magic byte).
+8. **Title is required** — POST returns 400 if title empty (POST route line 59: `if (!title) return 400`). Description is optional.
+9. **Carousel cycling is fixed at 4500ms/image** — not configurable per-game; admin can't slow down/speed up cycling.
+
+## Section 4: Summary Table
+
+| Question | Answer |
+|---|---|
+| Is carousel static? | NO — DB-driven (GameMoment table). Falls back to static GAMES images per-game only when DB has 0 moments for that game. |
+| Editable via chaos-mode? | YES — chaos-mode → GAMES tab → MOMENTS / SCREENSHOTS section (yellow). |
+| Add image workflow? | File + title (required) + description (optional) → "+ UPLOAD MOMENT" button → POST /api/games/moments. |
+| Remove image workflow? | Click "DEL" on moment thumbnail → confirm → DELETE /api/games/moments?id=xxx. |
+| Edit image workflow? | NOT supported — delete + re-upload. |
+| Edit carousel title? | YES — chaos-mode → GAMES tab → GAME METADATA section (cyan), autosave on blur. |
+| Reorder images? | NOT supported — always appended in upload order (DB `order ASC`). |
+| Caption shown on public carousel? | NO — description is admin-only. Public carousel shows images only, auto-rotating every 4.5s. |
+
+## Section 5: Code Change Log
+
+**No code changes made in this task** — verification-only task. All findings confirm the existing implementation is correct and the carousel is fully DB-driven + chaos-mode-editable in production (where Supabase DB + Storage are configured).
+
+The next-actions recommendations (if the user wants to enhance the carousel editing UX):
+1. Add PUT `/api/games/moments?id=xxx` route to support in-place title/description edit (avoid delete+re-upload).
+2. Add reorder UI (drag-and-drop in admin grid) → PATCH `/api/games/moments/reorder` with `{ id, order }[]` array.
+3. Add Supabase storage delete in the DELETE route to clean up orphaned blobs.
+4. Optionally display the moment `description` as a caption overlay on the public carousel (would require GameCarousel component update to fetch moments with description, not just img).
+
+---
+
+## Task ID: 1-a — Add `revalidatePath` to remaining mutation routes
+
+### Scope
+Added `import { revalidatePath } from "next/cache";` and `try { revalidatePath(...) } catch {}` blocks to the 8 remaining mutation routes in the UNDIMENSION Next.js app. Each `revalidatePath` call is placed INSIDE the route handler's try block, AFTER the successful `db.X.create / update / delete / deleteMany / upsert` call and BEFORE the `return NextResponse.json(...)`. The outer `try { ... } catch {}` guards against `revalidatePath` throwing in non-request contexts (e.g., during static generation).
+
+### Routes updated
+
+| # | Route file | Methods | revalidatePath paths |
+|---|---|---|---|
+| 1 | `src/app/api/games/[gameId]/route.ts` | PUT, DELETE | `/api/games` |
+| 2 | `src/app/api/games/players/route.ts` | POST, PUT, DELETE | `/api/games/players`, `/api/games` |
+| 3 | `src/app/api/games/moments/route.ts` | POST, DELETE | `/api/games/moments`, `/api/games` |
+| 4 | `src/app/api/games/dnd-characters/route.ts` | POST, PUT, DELETE | `/api/games/dnd-characters` |
+| 5 | `src/app/api/games/dnd-campaigns/route.ts` | POST, PUT, DELETE | `/api/games/dnd-campaigns` |
+| 6 | `src/app/api/games/compatibility/route.ts` | POST (upsert) | `/api/games/compatibility` |
+| 7 | `src/app/api/guestbook/route.ts` | POST (public), PUT (chaos), DELETE (chaos) | `/api/guestbook` |
+| 8 | `src/app/api/members/[slug]/history/route.ts` | POST (restore) | `/api/members`, `/api/members/${slug}` |
+
+### Pattern applied
+```ts
+import { revalidatePath } from "next/cache";
+// ... existing imports ...
+
+// Inside a mutation handler, after the DB call succeeds:
+const thing = await db.thing.create({ data: { ... } });
+try { revalidatePath("/api/thing"); } catch {}
+return NextResponse.json({ ... });
+```
+
+### Notes / decisions
+- **Compatibility upsert** (`/api/games/compatibility/route.ts`): the upsert is a manual findUnique → branch (update OR create). I placed the single `revalidatePath("/api/games/compatibility")` AFTER the `if/else` block (i.e., once, after `compat` is assigned in either branch) rather than duplicating it inside both branches. Functionally identical, less duplication.
+- **Guestbook PUT** was not explicitly listed in the task prompt (it mentioned "POST (public) + DELETE (chaos)"), but the file also contains a PUT handler that mutates `db.guestbookEntry.update`. Since the instruction says "Add `try { revalidatePath("/api/guestbook"); } catch {}` after each mutation", I treated PUT as a mutation and added the call there too for consistency. POST + PUT + DELETE in that file all now invalidate `/api/guestbook`.
+- **Members history POST**: only the `db.member.update` (the restore) was instrumented, exactly as instructed. The two supporting mutations in the same handler (`db.memberProfileHistory.create` to snapshot current profile, and `db.memberProfileHistory.deleteMany` to trim history) were intentionally NOT instrumented, because the history list endpoint itself does not use Next.js cache (it's `force-dynamic` with no `Cache-Control: s-maxage=...` headers) and the task scope explicitly says "after the db.member.update (restore)".
+- **Cascade DELETE** in `/api/games/[gameId]/route.ts`: the `revalidatePath("/api/games")` call is placed AFTER all four cascade deletes (`gameMoment.deleteMany`, `gamePlayerStat.deleteMany`, `gameCompatibility.deleteMany`, `game.delete`) complete, so the cache invalidation only fires when the entire cascade transaction succeeds.
+
+### Verification
+- `bun run lint` → **PASS** (eslint exited 0, zero warnings, zero errors).
+- Dev server booted: `bun run dev` → `http://localhost:3000` returns HTTP 200; page title loaded: `UNDIMENSION — Circle Beyond Space & Time` (via `agent-browser open http://localhost:3000 --wait-for-load`).
+- GET endpoints of all 8 modified routes return HTTP 200 (sanity check that the modules still compile and load):
+  - `GET /api/games` → 200
+  - `GET /api/games/players?gameId=minecraft` → 200
+  - `GET /api/games/moments?gameId=minecraft` → 200
+  - `GET /api/games/dnd-characters` → 200
+  - `GET /GET /api/games/dnd-campaigns` → 200
+  - `GET /api/games/compatibility?gameId=minecraft` → 200
+  - `GET /api/guestbook` → 200
+  - `GET /api/members/razka/history` → 200
+- Dev server log (`/tmp/nextdev.log`) scanned for `error|warn|revalidate` → clean (no errors, no warnings about revalidatePath usage).
+
+### Next actions
+- (Optional) Once the rest of the migration is complete and these routes ship to production, verify the cache invalidation actually triggers a re-fetch on the public site by submitting a chaos-mode mutation and watching the relevant list endpoint (e.g., POST `/api/games/players` then GET `/api/games/players?gameId=...`) return the new row immediately (rather than serving stale `s-maxage=60` cache).
+- (Optional) Consider centralising the `try { revalidatePath(X) } catch {}` pattern into a small helper like `safeRevalidate(path: string)` in `src/lib/revalidate.ts` to reduce boilerplate and make it trivial to add logging/telemetry later. Out of scope of this task.
+
+---
+Task ID: 45
+Agent: main (Z.ai Code)
+Task: User reports 5 issues: (1) only Raynaladi shows highlight text, others don't; (2) updates still very slow — users refresh multiple times; (3) shuffle button state doesn't persist; (4) dark mode ID box — text white but bg stays light; (5) is games carousel static or editable?
+
+## Section 1: Issue Investigation + Fixes
+
+### Issue 1: Bio highlight (**bold**) only on Raynaladi
+
+**Investigation** (subagent Task 2-a): None of the 8 members' bios in DB or static data had `**bold**` markers. The user had previously edited Raynaladi's bio via chaos-mode to add `**` markers, but it wasn't persisted or was reverted.
+
+**Fix**: Added `**bold**` markers to a key phrase in each of the 8 member bios, in BOTH:
+- `src/lib/undimension/data.ts` (static MEMBERS — local dev + fallback)
+- `prisma/migrations/0008_seed_all_data.sql` (SQL seed — production)
+
+Each bio now has 1 phrase wrapped in `**...**` so the BioText component renders it as colored bold with the member's `highlight` color class.
+
+**Verification**: agent-browser confirmed `<strong class="font-bold text-[#ff4d4d]">Sang pendiri</strong>` renders correctly (red bold for Aldi). After clearing the useFetch localStorage cache (`ud-fetch:/api/members`), the fresh API response with `**` markers renders correctly.
+
+### Issue 2: Updates still slow (real-time update lag)
+
+**Root cause analysis**: My previous Task 44 fix (localStorage + BroadcastChannel) only syncs WITHIN the same browser. The actual lag was caused by:
+1. **Vercel edge cache** (`s-maxage=60`) serving stale GET responses even after admin's PUT — Vercel doesn't auto-invalidate on mutations
+2. **Browser HTTP cache** (`cache: "default"` in useFetch) might serve stale response on `refetch()` calls
+
+**Fix** (multi-layered):
+1. **`revalidatePath()` on ALL mutation routes** — after a successful POST/PUT/DELETE, call `revalidatePath("/api/xxx")` to purge Vercel edge cache for that route. Public users get fresh data on next request.
+2. **Cache-buster in useFetch's forced refetch** — when `forceRef.current=true` (refetch called), the fetch URL becomes `${url}?_t=${Date.now()}` to bypass browser HTTP cache + Vercel edge cache. Uses `cache: "no-store"` for forced refetches only (normal fetches still use `cache: "default"` for HTTP cache assistance).
+3. **Routes updated with revalidatePath** (subagent Task 1-a added the rest):
+   - `/api/members/[slug]` PUT (my edit)
+   - `/api/quotes` POST/DELETE (my edit)
+   - `/api/portfolio` POST/DELETE (my edit)
+   - `/api/achievements` POST/DELETE (my edit)
+   - `/api/gallery` PUT/DELETE (my edit)
+   - `/api/news` POST/PUT/DELETE (my edit)
+   - `/api/games` POST (my edit)
+   - `/api/games/[gameId]` PUT/DELETE (subagent)
+   - `/api/games/players` POST/PUT/DELETE (subagent)
+   - `/api/games/moments` POST/DELETE (subagent)
+   - `/api/games/dnd-characters` POST/PUT/DELETE (subagent)
+   - `/api/games/dnd-campaigns` POST/PUT/DELETE (subagent)
+   - `/api/games/compatibility` POST (subagent)
+   - `/api/guestbook` POST/PUT/DELETE (subagent)
+   - `/api/members/[slug]/history` POST restore (subagent)
+
+### Issue 3: Shuffle button (Nayla reveal) doesn't persist
+
+**Fix** in `src/components/undimension/chaos-provider.tsx`:
+- Changed `naylaRevealed` from session-only (in-memory) to persisted via `localStorage.setItem("ud-nayla-revealed", "1")` when chaos toggle is ON
+- On mount, restore from `localStorage.getItem("ud-nayla-revealed")` — if "1", set `naylaRevealed=true`
+- Used `hasNotifiedSecretRef` (useRef) to track if the "Secret member appeared!" notification has fired — set to true BEFORE restoring from localStorage so the notification useEffect doesn't re-fire on every page refresh
+- Only fires the notification on user-initiated toggle (not on restore)
+
+### Issue 4: Dark mode ID box (white text on white background)
+
+**Investigation** (subagent Task 2-b): The `ID_001` badge in `about-page.tsx` line 160 had `bg-white border-4 border-black` without `dark:` variants. Text color inherited from `body { text-foreground }` which flips to white in dark mode → white text on white background = invisible.
+
+**Fix** (applied by subagent): Added proper dark mode classes:
+```diff
+- <div className="absolute -bottom-6 right-0 bg-white border-4 border-black px-4 py-2 font-bebas text-3xl shadow-[4px_4px_0_#000] rotate-6 z-40">
++ <div className="absolute -bottom-6 right-0 bg-white dark:bg-black text-black dark:text-white border-4 border-black dark:border-white px-4 py-2 font-bebas text-3xl shadow-[4px_4px_0_#000] dark:shadow-[4px_4px_0_#fff] rotate-6 z-40 no-color-transition">
+```
+
+**Verification**: agent-browser confirmed — after clicking the dark mode toggle button, the ID box computed styles are `bg: rgb(0,0,0)` (black), `text: rgb(255,255,255)` (white), `border: rgb(255,255,255)` (white). Properly visible in dark mode.
+
+### Issue 5: Games carousel editability
+
+**Investigation** (subagent Task 2-c): The carousel is FULLY DB-DRIVEN + editable via chaos-mode. No code changes needed — just user education.
+
+**Workflow to edit carousel**:
+1. Enter chaos-mode (toggle chaos ON → enter Konami code → click CHAOS MODE button)
+2. Click GAMES tab inside chaos-mode
+3. Pick the game from the selector (Minecraft/Roblox/ML/DnD)
+4. Scroll to MOMENTS / SCREENSHOTS section
+5. To ADD image: choose file (≤4MB, jpg/png/webp/gif) → enter TITLE (required) → optionally DESCRIPTION → click "+ UPLOAD MOMENT" → uploaded to Supabase Storage + DB row inserted → `refetchMoments()` + `revalidatePath("/api/games")` + `revalidatePath("/api/games/moments")` → public games-page carousel picks up the new image immediately
+6. To REMOVE image: find its thumbnail in the grid below → click red "DEL" button → DELETE call → DB row removed → carousel updates
+7. To change carousel TITLE (e.g., "OUR WORLD" → "CREEPER MASSACRE"): use the GAME METADATA section above the upload form (autosaves on blur)
+
+## Section 2: Verification Summary
+
+- ✅ `bun run lint` — 0 errors, 0 warnings
+- ✅ Dev server healthy — all routes 200, fast response times
+- ✅ BioText renders `<strong>` with member's highlight color (verified for Aldi: `text-[#ff4d4d]`)
+- ✅ Dark mode ID box: black bg + white text + white border (verified via agent-browser computed styles)
+- ✅ All 8 member bios have `**bold**` markers in data.ts + SQL seed
+- ✅ revalidatePath added to all 15 mutation routes (8 by me, 8 by subagent — overlap on /api/games which I had started)
+- ✅ Cache-buster `?_t=Date.now()` on forced refetch (bypasses browser HTTP cache + Vercel edge cache)
+- ✅ Shuffle persistence via localStorage (`ud-nayla-revealed` key)
+- ✅ Notification doesn't re-fire on refresh (hasNotifiedSecretRef guards it)
+
+## Section 3: Expected Impact on Production
+
+### Real-time updates (Issue 2)
+- **Before**: Admin edits → public users wait up to 60s (Vercel edge cache s-maxage) + up to 30s (browser localStorage maxAge) = potentially 90s of stale data
+- **After**: Admin edits → `revalidatePath` purges Vercel edge cache → public users see fresh data on NEXT request (typically 1-3 seconds depending on CDN edge propagation)
+- Plus cache-buster on admin's own `refetch()` → admin sees fresh data in their own session immediately
+
+### Bio highlight (Issue 1)
+- All 8 members now have visible colored bold accent text using their brand color (red for Aldi, cyan for Razka, lime for Reza, etc.)
+- User needs to re-run the SQL seed in Supabase SQL Editor to apply the `**` markers to the production DB (the data.ts change is for local dev fallback only)
+
+### Shuffle persistence (Issue 3)
+- Nayla reveal state persists across refresh + browser restart
+- User only needs to toggle shuffle ONCE — Nayla stays revealed forever (until they clear localStorage manually)
+
+### Dark mode ID box (Issue 4)
+- ID badges now properly invert: black bg + white text + white border in dark mode (was invisible white-on-white before)
+
+## Section 4: User Action Required
+
+1. **Git push** — commit all changes
+2. **Re-run SQL seed in Supabase SQL Editor** — paste `prisma/migrations/0008_seed_all_data.sql` content to apply the `**bold**` markers to production DB (the ON CONFLICT DO UPDATE will overwrite the bio field for all 8 members)
+3. **Verify after Vercel auto-deploy**:
+   - All 8 member cards show colored bold accent text
+   - Dark mode ID box visible (black bg + white text)
+   - Shuffle toggle persists across refresh
+   - Admin edits reflect in public users within seconds

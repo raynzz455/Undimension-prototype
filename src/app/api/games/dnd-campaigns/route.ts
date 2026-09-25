@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { db, isDbConfigured } from "@/lib/db";
 import { requireChaosMode } from "@/lib/chaos-auth";
 import { rateLimit, getClientIP, sanitizeText } from "@/lib/rate-limit";
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
         sessions: Math.max(0, Math.min(999, Number(body.sessions) || 0)),
       },
     });
+    try { revalidatePath("/api/games/dnd-campaigns"); } catch {}
     return NextResponse.json({ campaign });
   } catch (e) {
     return NextResponse.json({ error: "Gagal membuat campaign", detail: e instanceof Error ? e.message : String(e) }, { status: 500 });
@@ -85,6 +87,7 @@ export async function PUT(req: NextRequest) {
 
   try {
     const campaign = await db.dnDCampaign.update({ where: { id }, data });
+    try { revalidatePath("/api/games/dnd-campaigns"); } catch {}
     return NextResponse.json({ campaign });
   } catch (e) {
     return NextResponse.json({ error: "Gagal update campaign", detail: e instanceof Error ? e.message : String(e) }, { status: 500 });
@@ -110,6 +113,7 @@ export async function DELETE(req: NextRequest) {
 
   try {
     await db.dnDCampaign.delete({ where: { id } });
+    try { revalidatePath("/api/games/dnd-campaigns"); } catch {}
     return NextResponse.json({ ok: true, id });
   } catch (e) {
     return NextResponse.json({ error: "Gagal hapus campaign", detail: e instanceof Error ? e.message : String(e) }, { status: 500 });

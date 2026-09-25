@@ -157,7 +157,7 @@ const MemberCard = memo(function MemberCard({ m, i, onOpenMember }: { m: Member;
             <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#ffea00] border-4 border-black px-6 py-2 md:px-10 md:py-3 font-mono-ud font-black text-black text-xl md:text-4xl shadow-[6px_6px_0_#000] -rotate-3 z-40 whitespace-nowrap">
               &ldquo;{m.nick.toUpperCase()}&rdquo;
             </div>
-            <div className="absolute -bottom-6 right-0 bg-white border-4 border-black px-4 py-2 font-bebas text-3xl shadow-[4px_4px_0_#000] rotate-6 z-40">
+            <div className="absolute -bottom-6 right-0 bg-white dark:bg-black text-black dark:text-white border-4 border-black dark:border-white px-4 py-2 font-bebas text-3xl shadow-[4px_4px_0_#000] dark:shadow-[4px_4px_0_#fff] rotate-6 z-40 no-color-transition">
               ID_00{i + 1}
             </div>
           </div>

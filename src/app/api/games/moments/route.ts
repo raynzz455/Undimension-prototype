@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { db, isDbConfigured } from "@/lib/db";
 import { requireChaosMode } from "@/lib/chaos-auth";
 import { rateLimit, getClientIP, sanitizeText } from "@/lib/rate-limit";
@@ -91,6 +92,7 @@ export async function POST(req: NextRequest) {
     const moment = await db.gameMoment.create({
       data: { gameId, title, description, img: imgUrl, order: existing },
     });
+    try { revalidatePath("/api/games/moments"); revalidatePath("/api/games"); } catch {}
     return NextResponse.json({ moment });
   } catch (e) {
     return NextResponse.json({ error: "Gagal upload moment", detail: e instanceof Error ? e.message : String(e) }, { status: 500 });
@@ -116,6 +118,7 @@ export async function DELETE(req: NextRequest) {
 
   try {
     await db.gameMoment.delete({ where: { id } });
+    try { revalidatePath("/api/games/moments"); revalidatePath("/api/games"); } catch {}
     return NextResponse.json({ ok: true, id });
   } catch (e) {
     return NextResponse.json({ error: "Gagal hapus moment", detail: e instanceof Error ? e.message : String(e) }, { status: 500 });

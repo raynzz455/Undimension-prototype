@@ -66,7 +66,7 @@ export const MEMBERS: Member[] = [
     img: "",
     color: "bg-[#ff4d4d]",
     highlight: "text-[#ff4d4d]",
-    bio: "Titik nol dari mana semua orbit dimulai. Sang pendiri yang menyalakan percikan pertama dan tak pernah membiarkannya padam, sejauh apapun anggota lainnya pergi.",
+    bio: "Titik nol dari mana semua orbit dimulai. **Sang pendiri** yang menyalakan percikan pertama dan tak pernah membiarkannya padam, sejauh apapun anggota lainnya pergi.",
     tagline: "Lit the first spark. Never let it die.",
     quote: "Sejauh apapun kita terbang, gravitasi pertemanan selalu menarik kita kembali ke orbit yang sama.",
     funFacts: [
@@ -99,7 +99,7 @@ export const MEMBERS: Member[] = [
     img: "/members/member-razka.webp",
     color: "bg-[#00e5ff]",
     highlight: "text-[#00e5ff]",
-    bio: "Perancang struktur di balik kekacauan. Setiap blueprint yang dia buat ternyata jadi peta untuk petualangan yang tak terduga.",
+    bio: "Perancang struktur di balik kekacauan. **Setiap blueprint yang dia buat** ternyata jadi peta untuk petualangan yang tak terduga.",
     tagline: "Designs the chaos others call home.",
     quote: "Setiap struktur yang aku bangun punya pintu rahasia. Itu bukan bug — itu feature.",
     funFacts: [
@@ -132,7 +132,7 @@ export const MEMBERS: Member[] = [
     img: "/members/member-reza.webp",
     color: "bg-[#d4ff00]",
     highlight: "text-[#d4ff00]",
-    bio: "Pikirannya selalu lima langkah di depan. Saat yang lain panik, dia sudah menyiapkan tiga rencana cadangan.",
+    bio: "Pikirannya selalu lima langkah di depan. **Saat yang lain panik, dia sudah menyiapkan tiga rencana cadangan.**",
     tagline: "Five moves ahead before you blink.",
     quote: "Rencana A gagal? Tenang. Aku punya rencana B sampai Z, dan dua di antaranya melibatkan ayam.",
     funFacts: [
@@ -165,7 +165,7 @@ export const MEMBERS: Member[] = [
     img: "/members/member-abyan.webp",
     color: "bg-[#ff00ff]",
     highlight: "text-[#ff00ff]",
-    bio: "Barisan depan yang tak pernah mundur. Kalau ada tembok, dia yang duluan nubruk — dan biasanya temboknya yang kalah.",
+    bio: "Barisan depan yang tak pernah mundur. **Kalau ada tembok, dia yang duluan nubruk** — dan biasanya temboknya yang kalah.",
     tagline: "Runs headfirst. Walls lose.",
     quote: "Pikir dulu itu nanti. Sekarang, charge!",
     funFacts: [
@@ -198,7 +198,7 @@ export const MEMBERS: Member[] = [
     img: "/members/member-rasya.webp",
     color: "bg-[#ff8c00]",
     highlight: "text-[#ff8c00]",
-    bio: "Yang tak pernah bisa ditebak. Strateginya? Tidak ada. Dan itu justru strategi paling mematikan yang pernah ada.",
+    bio: "Yang tak pernah bisa ditebak. **Strateginya? Tidak ada.** Dan itu justru strategi paling mematikan yang pernah ada.",
     tagline: "No plan. That's the plan.",
     quote: "Kalau musuh bisa nebak langkahku, berarti aku belum cukup random.",
     funFacts: [
@@ -231,7 +231,7 @@ export const MEMBERS: Member[] = [
     img: "",
     color: "bg-[#00ff00]",
     highlight: "text-[#00ff00]",
-    bio: "Misteri berjalan. Kadang hadir, kadang hilang, tapi selalu muncul tepat saat dibutuhkan. Seperti glitch di matriks.",
+    bio: "Misteri berjalan. **Kadang hadir, kadang hilang**, tapi selalu muncul tepat saat dibutuhkan. Seperti glitch di matriks.",
     tagline: "Here when it matters. Gone otherwise.",
     quote: "Online status-ku tidak mencerminkan realita. Aku selalu ada — di latar.",
     funFacts: [
@@ -264,7 +264,7 @@ export const MEMBERS: Member[] = [
     img: "",
     color: "bg-[#8a2be2]",
     highlight: "text-[#8a2be2]",
-    bio: "Elemen yang mempercepat reaksi. Tanpa dia, semuanya akan berjalan lambat. Dengan dia, semuanya jadi ledakan.",
+    bio: "Elemen yang mempercepat reaksi. **Tanpa dia, semuanya akan berjalan lambat.** Dengan dia, semuanya jadi ledakan.",
     tagline: "Accelerator of every reaction.",
     quote: "Aku bukan pemicu masalah. Aku cuma yang bikin semuanya jadi lebih cepat — termasuk kelar-nya.",
     funFacts: [
@@ -297,7 +297,7 @@ export const MEMBERS: Member[] = [
     img: "",
     color: "bg-[#ff006e]",
     highlight: "text-[#ff006e]",
-    bio: "Entitas misterius yang muncul hanya saat chaos mode aktif. Hadir di bayang-bayang, namun selalu ada saat dibutuhkan.",
+    bio: "Entitas misterius yang muncul hanya saat chaos mode aktif. **Hadir di bayang-bayang**, namun selalu ada saat dibutuhkan.",
     tagline: "Here when chaos calls. Gone when it fades.",
     quote: "Aku bukan glitch. Aku fitur yang belum kamu temukan.",
     funFacts: [

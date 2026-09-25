@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { db, isDbConfigured, dbRetry } from "@/lib/db";
 import { PORTFOLIO_PROJECTS } from "@/lib/undimension/data";
 import { requireChaosMode } from "@/lib/chaos-auth";
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
     const color = cleanText(body.color || "#ff4d4d", 20);
     if (!title || !description) return NextResponse.json({ error: "Title dan description wajib diisi." }, { status: 400 });
     const project = await db.portfolioProject.create({ data: { title, description, techJson: JSON.stringify(tech), category, status, year, memberId, link, repo, color } });
+    try { revalidatePath("/api/portfolio"); } catch {}
     return NextResponse.json({ id: project.id, ...project, tech: JSON.parse(project.techJson) });
   } catch (e) { return NextResponse.json({ error: "Gagal membuat project." }, { status: 500 }); }
 }
@@ -63,6 +65,7 @@ export async function DELETE(req: NextRequest) {
     if (!id) return NextResponse.json({ error: "ID wajib diisi" }, { status: 400 });
     if (id.startsWith("p") && id.length <= 3) return NextResponse.json({ error: "Project statis tidak bisa dihapus" }, { status: 400 });
     await db.portfolioProject.delete({ where: { id } });
+    try { revalidatePath("/api/portfolio"); } catch {}
     return NextResponse.json({ success: true, id });
   } catch (e) { return NextResponse.json({ error: "Gagal menghapus project." }, { status: 500 }); }
 }

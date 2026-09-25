@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { db, isDbConfigured } from "@/lib/db";
 import { requireChaosMode } from "@/lib/chaos-auth";
 import { rateLimit, getClientIP, sanitizeText } from "@/lib/rate-limit";
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest) {
     } else {
       compat = await db.gameCompatibility.create({ data: { memberId, gameId, level } });
     }
+    try { revalidatePath("/api/games/compatibility"); } catch {}
     return NextResponse.json({ compat });
   } catch (e) {
     return NextResponse.json({ error: "Gagal set compatibility", detail: e instanceof Error ? e.message : String(e) }, { status: 500 });

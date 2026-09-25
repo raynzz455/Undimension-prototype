@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { db, isDbConfigured } from "@/lib/db";
 import { requireChaosMode } from "@/lib/chaos-auth";
 import { rateLimit, getClientIP, sanitizeText } from "@/lib/rate-limit";
@@ -63,6 +64,7 @@ export async function POST(req: NextRequest) {
         cha: clamp(body.cha),
       },
     });
+    try { revalidatePath("/api/games/dnd-characters"); } catch {}
     return NextResponse.json({ character });
   } catch (e) {
     return NextResponse.json({ error: "Gagal membuat DnD character", detail: e instanceof Error ? e.message : String(e) }, { status: 500 });
@@ -105,6 +107,7 @@ export async function PUT(req: NextRequest) {
 
   try {
     const character = await db.dnDCharacter.update({ where: { id }, data });
+    try { revalidatePath("/api/games/dnd-characters"); } catch {}
     return NextResponse.json({ character });
   } catch (e) {
     return NextResponse.json({ error: "Gagal update DnD character", detail: e instanceof Error ? e.message : String(e) }, { status: 500 });
@@ -130,6 +133,7 @@ export async function DELETE(req: NextRequest) {
 
   try {
     await db.dnDCharacter.delete({ where: { id } });
+    try { revalidatePath("/api/games/dnd-characters"); } catch {}
     return NextResponse.json({ ok: true, id });
   } catch (e) {
     return NextResponse.json({ error: "Gagal hapus DnD character", detail: e instanceof Error ? e.message : String(e) }, { status: 500 });

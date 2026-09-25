@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { db, isDbConfigured, dbRetry } from "@/lib/db";
 import { GALLERY_PHOTOS } from "@/lib/undimension/data";
 import { requireChaosMode } from "@/lib/chaos-auth";
@@ -44,6 +45,7 @@ export async function PUT(req: NextRequest) {
     if (date !== undefined) data.date = cleanText(date, 20);
     if (rotate !== undefined) data.rotate = cleanText(rotate, 10);
     const updated = await db.galleryPhoto.update({ where: { id }, data });
+    try { revalidatePath("/api/gallery"); } catch {}
     return NextResponse.json({ id: updated.id, img: updated.img, title: updated.title, author: updated.author, date: updated.date, rotate: updated.rotate });
   } catch (e) { return NextResponse.json({ error: "Gagal update foto." }, { status: 500 }); }
 }
@@ -57,6 +59,7 @@ export async function DELETE(req: NextRequest) {
     if (!id) return NextResponse.json({ error: "ID wajib diisi via ?id=" }, { status: 400 });
     if (id.startsWith("g") && id.length <= 3) return NextResponse.json({ error: "Foto statis tidak bisa dihapus." }, { status: 400 });
     await db.galleryPhoto.delete({ where: { id } });
+    try { revalidatePath("/api/gallery"); } catch {}
     return NextResponse.json({ success: true, id, message: "Foto dihapus." });
   } catch (e) { return NextResponse.json({ error: "Gagal menghapus foto." }, { status: 500 }); }
 }

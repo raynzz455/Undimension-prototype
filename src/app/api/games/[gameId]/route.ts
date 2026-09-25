@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { db, isDbConfigured } from "@/lib/db";
 import { requireChaosMode } from "@/lib/chaos-auth";
 import { rateLimit, getClientIP, sanitizeText } from "@/lib/rate-limit";
@@ -42,6 +43,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ game
 
   try {
     const game = await db.game.update({ where: { gameId }, data });
+    try { revalidatePath("/api/games"); } catch {}
     return NextResponse.json({ game });
   } catch (e) {
     return NextResponse.json(
@@ -74,6 +76,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ g
     await db.gamePlayerStat.deleteMany({ where: { gameId } });
     await db.gameCompatibility.deleteMany({ where: { gameId } });
     await db.game.delete({ where: { gameId } });
+    try { revalidatePath("/api/games"); } catch {}
     return NextResponse.json({ ok: true, gameId });
   } catch (e) {
     return NextResponse.json(

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { requireChaosMode } from "@/lib/chaos-auth";
 import { db, isDbConfigured } from "@/lib/db";
 import { rateLimit, getClientIP, sanitizeText } from "@/lib/rate-limit";
@@ -94,6 +95,7 @@ export async function POST(req: NextRequest) {
     const entry = await db.guestbookEntry.create({
       data: { name, message, color },
     });
+    try { revalidatePath("/api/guestbook"); } catch {}
 
     return NextResponse.json({
       id: entry.id,
@@ -123,6 +125,7 @@ export async function PUT(req: NextRequest) {
     if (message !== undefined) data.message = sanitizeText(String(message)).slice(0, 280);
     if (approved !== undefined) data.approved = Boolean(approved);
     const updated = await db.guestbookEntry.update({ where: { id }, data });
+    try { revalidatePath("/api/guestbook"); } catch {}
     return NextResponse.json({ id: updated.id, name: updated.name, message: updated.message, color: updated.color, approved: updated.approved, createdAt: updated.createdAt.toISOString() });
   } catch (e) { return NextResponse.json({ error: "Gagal update pesan." }, { status: 500 }); }
 }
@@ -135,6 +138,7 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID wajib diisi via ?id=" }, { status: 400 });
     await db.guestbookEntry.delete({ where: { id } });
+    try { revalidatePath("/api/guestbook"); } catch {}
     return NextResponse.json({ success: true, id, message: "Pesan dihapus." });
   } catch (e) { return NextResponse.json({ error: "Gagal menghapus pesan." }, { status: 500 }); }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { db, isDbConfigured } from "@/lib/db";
 import { requireChaosMode } from "@/lib/chaos-auth";
 import { rateLimit, getClientIP, sanitizeText } from "@/lib/rate-limit";
@@ -76,6 +77,7 @@ export async function POST(req: NextRequest) {
         order: Number(body.order) || 0,
       },
     });
+    try { revalidatePath("/api/games/players"); revalidatePath("/api/games"); } catch {}
     return NextResponse.json({ player });
   } catch (e) {
     return NextResponse.json({ error: "Gagal membuat player", detail: e instanceof Error ? e.message : String(e) }, { status: 500 });
@@ -122,6 +124,7 @@ export async function PUT(req: NextRequest) {
 
   try {
     const player = await db.gamePlayer.update({ where: { id }, data });
+    try { revalidatePath("/api/games/players"); revalidatePath("/api/games"); } catch {}
     return NextResponse.json({ player });
   } catch (e) {
     return NextResponse.json({ error: "Gagal update player", detail: e instanceof Error ? e.message : String(e) }, { status: 500 });
@@ -147,6 +150,7 @@ export async function DELETE(req: NextRequest) {
 
   try {
     await db.gamePlayer.delete({ where: { id } });
+    try { revalidatePath("/api/games/players"); revalidatePath("/api/games"); } catch {}
     return NextResponse.json({ ok: true, id });
   } catch (e) {
     return NextResponse.json({ error: "Gagal hapus player", detail: e instanceof Error ? e.message : String(e) }, { status: 500 });

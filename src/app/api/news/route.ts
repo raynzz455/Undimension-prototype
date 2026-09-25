@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { requireChaosMode } from "@/lib/chaos-auth";
 import { db, isDbConfigured } from "@/lib/db";
 import { rateLimit, getClientIP, sanitizeText, cleanText } from "@/lib/rate-limit";
@@ -78,6 +79,7 @@ export async function POST(req: NextRequest) {
     const article = await db.newsArticle.create({
       data: { title, body: text, category, author, img },
     });
+    try { revalidatePath("/api/news"); } catch {}
 
     return NextResponse.json({
       id: article.id,
@@ -107,9 +109,10 @@ export async function PUT(req: NextRequest) {
     if (text !== undefined) data.body = sanitizeText(String(text)).slice(0, 500);
     if (category !== undefined) data.category = String(category).trim().slice(0, 20).toUpperCase();
     if (author !== undefined) data.author = String(author).trim().slice(0, 30).toUpperCase();
-    if (img !== undefined) data.img = img ? String(img).slice(0, 500) : null;
+    if (img !== undefined) data.img = img ? cleanText(img, 500) : null;
     if (pinned !== undefined) data.pinned = Boolean(pinned);
     const updated = await db.newsArticle.update({ where: { id }, data });
+    try { revalidatePath("/api/news"); } catch {}
     return NextResponse.json({ id: updated.id, title: updated.title, body: updated.body, category: updated.category, author: updated.author, img: updated.img, pinned: updated.pinned, createdAt: updated.createdAt.toISOString() });
   } catch (e) { return NextResponse.json({ error: "Gagal update artikel." }, { status: 500 }); }
 }
@@ -122,6 +125,7 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID wajib diisi via ?id=" }, { status: 400 });
     await db.newsArticle.delete({ where: { id } });
+    try { revalidatePath("/api/news"); } catch {}
     return NextResponse.json({ success: true, id, message: "Artikel dihapus." });
   } catch (e) { return NextResponse.json({ error: "Gagal menghapus artikel." }, { status: 500 }); }
 }

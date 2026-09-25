@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { db, isDbConfigured } from "@/lib/db";
 import { MEMBERS } from "@/lib/undimension/data";
 import { requireChaosMode } from "@/lib/chaos-auth";
@@ -173,6 +174,18 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ slug: strin
     } catch (e) {
       console.warn(`[PUT /api/members/${slug}] hidden update skipped (column may not exist):`, e instanceof Error ? e.message : e);
     }
+  }
+
+  // Invalidate Vercel edge cache for member-related routes so public users
+  // see the updated data immediately (was: 60s lag due to s-maxage).
+  // revalidatePath triggers Next.js on-demand ISR — purges the cached GET
+  // /api/members response from Vercel's edge cache.
+  try {
+    revalidatePath("/api/members");
+    revalidatePath("/api/members/[slug]", "page");
+    revalidateTag("members");
+  } catch (e) {
+    console.warn(`[PUT /api/members/${slug}] revalidatePath failed:`, e instanceof Error ? e.message : e);
   }
 
   return NextResponse.json({ member: mapMember(updated) });

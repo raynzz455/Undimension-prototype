@@ -10,7 +10,7 @@ import { MEMBER_CV } from "@/lib/undimension/cv-data";
 import { useScrollReveal } from "@/hooks/use-scroll-reveal";
 import { useSfx } from "@/hooks/use-sfx";
 import { useFetch } from "@/hooks/use-fetch";
-import { cn } from "@/lib/utils";
+import { cn, extractHex, getContrastText, isDarkColor } from "@/lib/utils";
 import {
   Github, ExternalLink, Code2, Gamepad2, Smartphone, Wrench, Bot, Package,
   Briefcase, GraduationCap, Award, MapPin, Clock, ChevronLeft, ChevronRight,
@@ -361,8 +361,17 @@ function MemberPortfolio({ member }: { member: Member }) {
   }));
   const allAchievements = [...dbAchievements, ...(staticCv?.achievements || [])];
 
-  const memberColor = member.color.replace("bg-[", "").replace("]", "");
+  // Extract raw hex from member.color (e.g. "bg-[#ff4d4d]" → "#ff4d4d").
+  // Used for inline style backgrounds so admin-picked custom colors work
+  // even if Tailwind JIT didn't pre-generate CSS for that arbitrary value.
+  const memberColor = extractHex(member.color, "#ff4d4d");
   const availColor = AVAILABILITY_COLORS[availability] || "#00e5ff";
+
+  // Adaptive text color: dark member color → white text on top; light color → black text.
+  // This makes the header card readable regardless of which color the admin picks.
+  const memberBgIsDark = isDarkColor(memberColor);
+  const contrastText = getContrastText(memberColor);  // "#ffffff" or "#000000"
+  const availContrastText = getContrastText(availColor);
 
   return (
     <AnimatePresence mode="wait">
@@ -374,9 +383,16 @@ function MemberPortfolio({ member }: { member: Member }) {
         transition={{ duration: 0.3 }}
         className="space-y-6"
       >
-        {/* Header card */}
+        {/* Header card — outer container (page bg, theme-aware) */}
         <div className="border-8 border-black dark:border-white bg-white dark:bg-[#09090b] shadow-[12px_12px_0_#000] dark:shadow-[12px_12px_0_#fff] overflow-hidden">
-          <div className={cn("p-6 md:p-8 border-b-8 border-black dark:border-white", member.color)}>
+          {/* Inner colored area — uses member's color as inline bg (works for ANY hex,
+              not just Tailwind-pre-generated). Text color adapts based on luminance:
+              dark member color → white text; light member color → black text.
+              Does NOT change with dark/light mode toggle (member color persists). */}
+          <div
+            className="p-6 md:p-8 border-b-8 border-black dark:border-white"
+            style={{ backgroundColor: memberColor, color: contrastText }}
+          >
             <div className="flex flex-col md:flex-row gap-6 items-start">
               {/* Big Photo */}
               <div className="border-8 border-black bg-black p-2 shadow-[12px_12px_0_#000] flex-shrink-0 w-full md:w-64 lg:w-72 relative">
@@ -401,15 +417,23 @@ function MemberPortfolio({ member }: { member: Member }) {
                   &ldquo;{member.nick.toUpperCase()}&rdquo;
                 </div>
               </div>
-              {/* Info */}
-              <div className="flex-1 text-black pt-4 md:pt-0">
+              {/* Info — text color inherits from parent (memberColor bg + adaptive contrastText) */}
+              <div className="flex-1 pt-4 md:pt-0">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <span className="font-mono-ud text-xs font-black bg-black text-white px-2 py-1 border-2 border-black">
+                  {/* ID badge — bg+text adapt to member bg (dark member bg → white badge; light → black) */}
+                  <span
+                    className="font-mono-ud text-xs font-black px-2 py-1 border-2"
+                    style={{
+                      backgroundColor: memberBgIsDark ? "#fff" : "#000",
+                      color: memberBgIsDark ? "#000" : "#fff",
+                      borderColor: memberBgIsDark ? "#fff" : "#000",
+                    }}
+                  >
                     ID_{member.id.toUpperCase()}
                   </span>
                   <span
-                    className="font-mono-ud text-xs font-black px-2 py-1 border-2 border-black"
-                    style={{ backgroundColor: availColor, color: "#000" }}
+                    className="font-mono-ud text-xs font-black px-2 py-1 border-2"
+                    style={{ backgroundColor: availColor, color: availContrastText, borderColor: availContrastText }}
                   >
                     ● {availability}
                   </span>
@@ -427,25 +451,30 @@ function MemberPortfolio({ member }: { member: Member }) {
                 ) : (
                   <p className="font-outfit text-base md:text-xl mt-4 max-w-xl leading-relaxed"><BioText highlightClass={member.highlight}>{member.bio}</BioText></p>
                 )}
-                {/* Socials */}
+                {/* Socials — bg+text adapt to member bg (dark member bg → white socials; light → black) */}
                 {member.socials && member.socials.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-4">
-                    {member.socials.map((s, i) => (
-                      <a
-                        key={i}
-                        href={s.href && s.href !== "#" ? s.href : undefined}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={cn(
-                          "inline-flex items-center gap-1.5 px-3 py-1.5 border-2 border-black dark:border-white font-mono-ud text-xs md:text-sm font-bold transition-all no-color-transition",
-                          s.href && s.href !== "#"
-                            ? "bg-black text-white dark:bg-white dark:text-black hover:bg-[#ff4d4d] hover:text-white hover:border-[#ff4d4d]"
-                            : "bg-black/5 dark:bg-white/5 text-black/30 dark:text-white/30 cursor-default"
-                        )}
-                      >
-                        {s.label}
-                      </a>
-                    ))}
+                    {member.socials.map((s, i) => {
+                      // Adaptive bg/text: contrast with member color
+                      const socialBg = memberBgIsDark ? "#ffffff" : "#000000";
+                      const socialText = memberBgIsDark ? "#000000" : "#ffffff";
+                      const isPlaceholder = !s.href || s.href === "#";
+                      return (
+                        <a
+                          key={i}
+                          href={isPlaceholder ? undefined : s.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 border-2 font-mono-ud text-xs md:text-sm font-bold transition-all no-color-transition hover:bg-[#ff4d4d] hover:text-white hover:border-[#ff4d4d]"
+                          style={isPlaceholder
+                            ? { backgroundColor: "transparent", color: `${contrastText}55`, borderColor: `${contrastText}30`, cursor: "default" }
+                            : { backgroundColor: socialBg, color: socialText, borderColor: socialBg }
+                          }
+                        >
+                          {s.label}
+                        </a>
+                      );
+                    })}
                   </div>
                 )}
               </div>

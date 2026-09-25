@@ -102,8 +102,11 @@ const MemberCard = memo(function MemberCard({ m, i, onOpenMember }: { m: Member;
     <div
       className={cn(
         "relative w-full border-8 border-black dark:border-white p-6 md:p-12 z-10 group",
-        m.color,
       )}
+      // Inline style overrides Tailwind class → works for ANY color the admin
+      // picks via the chaos-mode color input, even if Tailwind didn't pre-generate
+      // the CSS for that arbitrary `bg-[#hex]` value.
+      style={{ backgroundColor: (m.color.match(/#[0-9a-fA-F]{6}/) || ["#ff4d4d"])[0] }}
       data-reveal-delay={String((i % 3) * 80)}
     >
       {/* Giant Background Nickname */}
@@ -139,7 +142,7 @@ const MemberCard = memo(function MemberCard({ m, i, onOpenMember }: { m: Member;
                 <img
                   src={m.img}
                   alt={m.nick}
-                  className="w-full aspect-[4/5] md:aspect-[9/16] object-cover grayscale contrast-[1.4] group-hover:grayscale-0 transition-all duration-300 ud-wobble-hover"
+                  className="w-full aspect-[4/5] md:aspect-[9/16] object-cover grayscale-0 md:grayscale contrast-[1.4] md:group-hover:grayscale-0 transition-all duration-300 ud-wobble-hover"
                   loading="lazy"
                 />
               ) : (
@@ -300,7 +303,7 @@ function HarapanCardItem({ card }: { card: (typeof HARAPAN)[number] }) {
           <img
             src={card.img}
             alt={card.title}
-            className="w-full aspect-[4/3] object-cover grayscale group-hover:grayscale-0 contrast-125 transition-all duration-500"
+            className="w-full aspect-[4/3] object-cover grayscale-0 md:grayscale md:group-hover:grayscale-0 contrast-125 transition-all duration-500"
             loading="lazy"
           />
           <div className="absolute inset-0 ud-scanlines opacity-60" />

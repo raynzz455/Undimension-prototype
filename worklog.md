@@ -3382,3 +3382,136 @@ Each bio now has 1 phrase wrapped in `**...**` so the BioText component renders 
    - Dark mode ID box visible (black bg + white text)
    - Shuffle toggle persists across refresh
    - Admin edits reflect in public users within seconds
+
+---
+Task ID: 46
+Agent: main (Z.ai Code)
+Task: User reports 4 issues: (1) highlight color not showing on non-Aldi members (but colors are set); (2) color customization via chaos-mode doesn't actually change card color; (3) bioPortfolio should REPLACE about-bio on portfolio page (not show both); (4) member photos on mobile are black/white (should be colored since no hover on mobile).
+
+## Section 1: Investigation + Fixes
+
+### Issue 1: Highlight color not showing on non-Aldi members
+
+**Investigation**: agent-browser verified the API returns correct `highlight` values for all 8 members (e.g., `text-[#00e5ff]` for Razka). The BioText component rendered `<strong className="font-bold text-[#00e5ff]">` correctly + computed color was `rgb(0, 229, 255)` (cyan). So the HIGHLIGHT actually WORKS — the user's issue was stale useFetch localStorage cache from before the data.ts edit added `**bold**` markers.
+
+**No code fix needed** — the issue resolves itself after cache expires (30s maxAge) or after the user clears localStorage / hard-refreshes. Verified all 8 members render correct colors after cache clear.
+
+### Issue 2: Color customization doesn't change card color
+
+**Root cause**: Tailwind JIT only generates CSS for arbitrary `bg-[#hex]` values that appear as LITERAL strings in source code at build time. When admin picks a NEW color via chaos-mode color input (e.g., `#abcdef`), the resulting `bg-[#abcdef]` class has NO CSS generated → no background color applied → card doesn't change.
+
+**Fix**: Switch from Tailwind class to INLINE STYLE for the card background:
+- `about-page.tsx` line 105: `<div className={cn("...", m.color)}>` → `<div className="..." style={{ backgroundColor: (m.color.match(/#[0-9a-fA-F]{6}/) || ["#ff4d4d"])[0] }}>`
+- Extract hex from the `m.color` string (e.g., `bg-[#ff4d4d]` → `#ff4d4d`)
+- Inline style works for ANY hex value (not just Tailwind-pre-generated ones)
+
+**Same fix applied to BioText** (`primitives.tsx`):
+- The `<strong>` element was using `className={cn("font-bold", highlightClass)}` which suffered the same Tailwind JIT limitation
+- Changed to extract hex from `highlightClass` + apply as `style={{ color: highlightColor }}` on the `<strong>`
+- Now `**bold**` text gets the member's brand color for ANY hex value (admin custom colors work)
+
+### Issue 3: bioPortfolio should replace about-bio on portfolio page
+
+**Root cause**: `portfolio-page.tsx` was showing BOTH:
+- Line 423: `<BioText highlightClass={member.highlight}>{member.bio}</BioText>` (about-page bio with highlight)
+- Lines 424-429: A separate "PORTFOLIO BIO" section with `<BioText>{member.bioPortfolio}</BioText>` (rendered with `**bold**` as plain bold, no color)
+
+User wants: if `bioPortfolio` is set, show it INSTEAD of `bio` (not both), and render `bioPortfolio` as PLAIN TEXT (no markdown, no highlight).
+
+**Fix** (`portfolio-page.tsx` lines 423-429):
+```tsx
+{member.bioPortfolio ? (
+  <p className="font-outfit text-base md:text-xl mt-4 max-w-xl leading-relaxed">{member.bioPortfolio}</p>
+) : (
+  <p className="font-outfit text-base md:text-xl mt-4 max-w-xl leading-relaxed"><BioText highlightClass={member.highlight}>{member.bio}</BioText></p>
+)}
+```
+- If `bioPortfolio` is set: show it as plain text (no BioText component → no markdown rendering)
+- Else: show `member.bio` with BioText + member's highlight color (the about-page behavior)
+
+### Issue 4: Mobile photos are black/white
+
+**Root cause**: Member photos used `className="... grayscale ... group-hover:grayscale-0 ..."` — this applies grayscale by default + removes it on hover. On mobile (no hover), photos stay grayscale.
+
+**Fix** (`about-page.tsx` line 142 + line 303):
+```diff
+- className="... grayscale ... group-hover:grayscale-0 ..."
++ className="... grayscale-0 md:grayscale md:group-hover:grayscale-0 ..."
+```
+- Mobile (default, no `md:` prefix): `grayscale-0` = COLORED photos always (no hover needed)
+- Desktop (`md:` prefix): `md:grayscale` = grayscale by default, `md:group-hover:grayscale-0` = colored on hover
+
+Applied to BOTH image instances:
+- Line 142: member card photos
+- Line 303: HARAPAN/timeline card photos
+
+## Section 2: Verification (agent-browser)
+
+### BioText inline style + colors (Issue 1 + 2)
+```js
+agent-browser eval → {
+  count: 7 strong tags,
+  samples: [
+    { text: "Sang pendiri", className: "font-bold", inlineStyleColor: "rgb(255, 77, 77)", computedColor: "rgb(255, 77, 77)" },  // Aldi red ✅
+    { text: "Setiap blueprint yang dia buat", className: "font-bold", inlineStyleColor: "rgb(0, 229, 255)", computedColor: "rgb(0, 229, 255)" },  // Razka cyan ✅
+    { text: "Saat yang lain panik, dia suda", className: "font-bold", inlineStyleColor: "rgb(212, 255, 0)", computedColor: "rgb(212, 255, 0)" },  // Reza lime ✅
+  ]
+}
+```
+- ✅ `<strong>` className is now just `font-bold` (no Tailwind arbitrary class)
+- ✅ Inline `style.color` applies the hex correctly for each member
+- ✅ Computed color matches → colors render correctly
+- ✅ This works for ANY hex (not just pre-generated Tailwind classes) → admin custom colors will work
+
+### Card inline background (Issue 2)
+```js
+{ cardInlineBg: "rgb(255, 77, 77)" }  // Aldi card = red ✅
+```
+- ✅ Card uses inline style for backgroundColor
+- ✅ Works for any hex value the admin picks
+
+### Mobile grayscale fix (Issue 4)
+```js
+agent-browser eval → {
+  totalImgs: 8,
+  samples: all have className "grayscale-0 md:grayscale ... md:group-hover:grayscale-0",
+  hasMobileFix: true  // all 3 sampled ✅
+}
+```
+- ✅ All member photos now have `grayscale-0` (mobile = colored) + `md:grayscale` (desktop = grayscale by default) + `md:group-hover:grayscale-0` (desktop hover = colored)
+- Mobile users will see COLORED photos (no more black/white)
+- Desktop users still get the grayscale → color-on-hover effect
+
+### Portfolio bio fix (Issue 3)
+- Code logic verified: if `bioPortfolio` is truthy → render `bioPortfolio` as plain text; else → render `bio` with BioText + highlight
+- Can't E2E verify locally (no member has `bioPortfolio` set in current data) but the conditional rendering is correct
+
+## Section 3: Lint + Dev Server
+
+- ✅ `bun run lint` — 0 errors, 0 warnings
+- ✅ Dev server healthy — all routes 200, fast response times (5-50ms)
+- ✅ No errors in dev.log
+
+## Section 4: Files Modified
+
+1. `src/components/undimension/about-page.tsx`
+   - Line 105: card `m.color` → inline style `backgroundColor`
+   - Line 142: member photo `grayscale` → `grayscale-0 md:grayscale md:group-hover:grayscale-0`
+   - Line 303: HARAPAN photo `grayscale` → `grayscale-0 md:grayscale md:group-hover:grayscale-0`
+
+2. `src/components/undimension/primitives.tsx`
+   - BioText: extract hex from `highlightClass` + apply as `style.color` on `<strong>` (instead of className)
+   - Works for ANY hex value (not just Tailwind-pre-generated ones)
+
+3. `src/components/undimension/portfolio-page.tsx`
+   - Lines 423-429: if `bioPortfolio` set → show plain text; else → show `bio` with BioText + highlight
+
+## Section 5: User Action Required
+
+1. **Git push** — commit the fixes
+2. **After Vercel auto-deploy** — verify:
+   - All member cards show colored bold accent text using their brand color (works even if admin customizes color)
+   - Admin's color customization now actually changes card background (any hex)
+   - Portfolio page shows `bioPortfolio` (plain) INSTEAD of `bio` (highlighted) when bioPortfolio is set
+   - Mobile photos are COLORED (no more grayscale on mobile)
+3. **Optional**: re-run SQL seed in Supabase SQL Editor (already done in Task 45) to apply `**bold**` markers to production DB

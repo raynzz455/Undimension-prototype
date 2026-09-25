@@ -420,12 +420,12 @@ function MemberPortfolio({ member }: { member: Member }) {
                   <span className="flex items-center gap-1"><MapPin className="w-4 h-4" />{location}</span>
                   <span className="flex items-center gap-1"><Clock className="w-4 h-4" />EST. {member.joinYear}</span>
                 </div>
-                <p className="font-outfit text-base md:text-xl mt-4 max-w-xl leading-relaxed"><BioText highlightClass={member.highlight}>{member.bio}</BioText></p>
-                {member.bioPortfolio && (
-                  <div className="mt-4 pt-4 border-t border-white/10">
-                    <div className="font-bebas text-2xl" style={{ color: memberColor }}>PORTFOLIO BIO</div>
-                    <p className="font-outfit text-base md:text-lg mt-2 leading-relaxed text-white/80"><BioText>{member.bioPortfolio}</BioText></p>
-                  </div>
+                {/* If bioPortfolio is set, show it INSTEAD of the about-page bio (plain text, no markdown).
+                    Otherwise, show the about-page bio (with member's highlight color via **bold**). */}
+                {member.bioPortfolio ? (
+                  <p className="font-outfit text-base md:text-xl mt-4 max-w-xl leading-relaxed">{member.bioPortfolio}</p>
+                ) : (
+                  <p className="font-outfit text-base md:text-xl mt-4 max-w-xl leading-relaxed"><BioText highlightClass={member.highlight}>{member.bio}</BioText></p>
                 )}
                 {/* Socials */}
                 {member.socials && member.socials.length > 0 && (

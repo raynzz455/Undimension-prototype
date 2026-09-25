@@ -6,7 +6,7 @@ import { X, Quote, Sparkles, Calendar, Flame, Share2, Check } from "lucide-react
 import type { Member } from "@/lib/undimension/data";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useSfx } from "@/hooks/use-sfx";
-import { cn } from "@/lib/utils";
+import { cn, extractHex } from "@/lib/utils";
 import { UnavailablePhoto } from "./unavailable-photo";
 import { BioText } from "./primitives";
 
@@ -20,6 +20,12 @@ export function MemberDetailModal({
   const open = member !== null;
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef, open);
+
+  // Extract raw hex from member.color + member.highlight (e.g. "bg-[#ff4d4d]" → "#ff4d4d").
+  // Used for inline styles so admin-picked custom colors work even if Tailwind
+  // JIT didn't pre-generate CSS for that arbitrary `bg-[#hex]`/`text-[#hex]` value.
+  const memberHexColor = member ? extractHex(member.color, "#ff4d4d") : "#ff4d4d";
+  const memberHexHighlight = member ? extractHex(member.highlight, "#ff4d4d") : "#ff4d4d";
 
   // Reset scroll to top BEFORE PAINT when member changes
   // Uses double rAF to ensure DOM is fully rendered before resetting scroll
@@ -98,8 +104,8 @@ export function MemberDetailModal({
               tabIndex={-1}
               className={cn(
                 "relative w-full max-h-[90vh] overflow-y-auto border-8 border-black dark:border-white shadow-[8px_8px_0_#000] md:shadow-[16px_16px_0_#000] dark:md:shadow-[16px_16px_0_#d4ff00] outline-none",
-                member.color,
               )}
+              style={{ backgroundColor: memberHexColor }}
               initial={{ scale: 0.92, y: 20, rotate: -1 }}
               animate={{ scale: 1, y: 0, rotate: 0 }}
               exit={{ scale: 0.92, y: 20, rotate: -1 }}
@@ -155,9 +161,9 @@ export function MemberDetailModal({
                     {member.role}
                   </div>
                   <div className="mt-3 flex items-center justify-center md:justify-start gap-2 text-xs font-mono-ud">
-                    <Flame className={cn("w-4 h-4", member.highlight)} />
+                    <Flame className="w-4 h-4" style={{ color: memberHexHighlight }} />
                     <span className="text-white/80">
-                      ELEMENT: <span className={member.highlight}>{member.element}</span>
+                      ELEMENT: <span style={{ color: memberHexHighlight }}>{member.element}</span>
                     </span>
                   </div>
                 </div>
@@ -189,7 +195,7 @@ export function MemberDetailModal({
               {/* Fun Facts */}
               <div>
                 <h3 className="font-bebas text-3xl mb-3 flex items-center gap-2">
-                  <Sparkles className={cn("w-6 h-6", member.highlight)} />
+                  <Sparkles className="w-6 h-6" style={{ color: memberHexHighlight }} />
                   FUN FACTS
                 </h3>
                 <ul className="space-y-2">
@@ -198,7 +204,7 @@ export function MemberDetailModal({
                       key={i}
                       className="font-mono-ud text-sm flex gap-3 items-start border-l-4 border-black dark:border-white pl-3 py-1 bg-black/5 dark:bg-white/5"
                     >
-                      <span className={cn("font-bebas text-xl leading-none", member.highlight)}>
+                      <span className="font-bebas text-xl leading-none" style={{ color: memberHexHighlight }}>
                         0{i + 1}
                       </span>
                       <span>{fact}</span>
@@ -222,7 +228,7 @@ export function MemberDetailModal({
                       )}
                     >
                       <div className="font-bebas text-2xl">{stat.label}</div>
-                      <div className={cn("font-bebas text-4xl leading-none", i !== 1 && member.highlight)}>
+                      <div className="font-bebas text-4xl leading-none" style={i !== 1 ? { color: memberHexHighlight } : undefined}>
                         {stat.value}
                       </div>
                     </div>

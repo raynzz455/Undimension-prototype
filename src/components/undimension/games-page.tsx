@@ -11,8 +11,10 @@ import { cn } from "@/lib/utils";
 function GameCarousel({ images, title }: { images: string[]; title: string }) {
   const [idx, setIdx] = useState(0);
   const [progress, setProgress] = useState(0);
+  const isEmpty = !images || images.length === 0;
 
   useEffect(() => {
+    if (isEmpty) return; // no auto-advance when empty
     const DURATION = 4500;
     const TICK = 50;
     let elapsed = 0;
@@ -26,7 +28,7 @@ function GameCarousel({ images, title }: { images: string[]; title: string }) {
       }
     }, TICK);
     return () => clearInterval(timer);
-  }, [images.length]);
+  }, [images.length, isEmpty]);
 
   const goTo = (i: number) => {
     setIdx(i);
@@ -39,22 +41,36 @@ function GameCarousel({ images, title }: { images: string[]; title: string }) {
         {title}
       </div>
       <div className="border-2 md:border-4 border-black overflow-hidden relative aspect-video bg-black ud-crt">
-        <img
-          src={images[idx]}
-          alt={`${title} moment ${idx + 1}`}
-          className="w-full h-full object-cover transition-opacity duration-300"
-          loading="lazy"
-          key={idx}
-        />
-        {/* REC indicator */}
-        <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/70 px-2 py-0.5 border border-white/30">
-          <span className="w-2 h-2 bg-[#ff4d4d] rounded-full ud-blink" />
-          <span className="font-mono-ud text-[9px] font-black text-white tracking-widest">REC</span>
-        </div>
-        {/* Tape-deck counter (bottom-left) */}
-        <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 border border-white/30 font-mono-ud text-[9px] font-black text-[#d4ff00] tracking-widest">
-          ▶ {String(idx + 1).padStart(2, "0")}/{String(images.length).padStart(2, "0")}
-        </div>
+        {isEmpty ? (
+          // Empty state — no moments uploaded for this game yet
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
+            <div className="font-bebas text-3xl md:text-5xl text-[#d4ff00] tracking-widest mb-2">
+              NO MOMENTS YET
+            </div>
+            <div className="font-mono-ud text-xs md:text-sm text-white/60 leading-relaxed">
+              {title === "OUR WORLD" ? "Upload screenshots via chaos mode → GAMES tab → MOMENTS section." : "Moments will appear here once uploaded."}
+            </div>
+          </div>
+        ) : (
+          <>
+            <img
+              src={images[idx]}
+              alt={`${title} moment ${idx + 1}`}
+              className="w-full h-full object-cover transition-opacity duration-300"
+              loading="lazy"
+              key={idx}
+            />
+            {/* REC indicator */}
+            <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/70 px-2 py-0.5 border border-white/30">
+              <span className="w-2 h-2 bg-[#ff4d4d] rounded-full ud-blink" />
+              <span className="font-mono-ud text-[9px] font-black text-white tracking-widest">REC</span>
+            </div>
+            {/* Tape-deck counter (bottom-left) */}
+            <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 border border-white/30 font-mono-ud text-[9px] font-black text-[#d4ff00] tracking-widest">
+              ▶ {String(idx + 1).padStart(2, "0")}/{String(images.length).padStart(2, "0")}
+            </div>
+          </>
+        )}
       </div>
       {/* Tape-deck progress bar */}
       <div className="mt-2 h-1.5 bg-black border border-black overflow-hidden">
@@ -78,7 +94,7 @@ function GameCarousel({ images, title }: { images: string[]; title: string }) {
           ))}
         </div>
         <div className="font-mono-ud font-black text-black text-xs md:text-base">
-          IMG_0{idx + 1}
+          {isEmpty ? "EMPTY" : `IMG_0${idx + 1}`}
         </div>
       </div>
     </div>
@@ -197,17 +213,11 @@ function GameSectionView({ game }: { game: GameSection }) {
 
 export function GamesPage() {
   // Fetch games from DB (includes uploaded moment photos as `images`).
-  // Falls back to static GAMES if DB unconfigured/empty — so the carousel
-  // shows DB-uploaded photos when available, static photos otherwise.
-  // Per-game: if DB game has 0 moments, fall back to that game's static images.
+  // Falls back to static GAMES ONLY if DB is unconfigured or returns 0 games.
+  // Per-game: if DB game has 0 moments (admin deleted all), show empty state —
+  // NO static fallback (was showing dummy photos even after admin deleted all).
   const { data } = useFetch<{ games: GameSection[] }>("/api/games");
-  const games = (data?.games?.length ? data.games : GAMES).map((g) => {
-    const staticGame = GAMES.find((s) => s.id === g.id);
-    if (staticGame && (!g.images || g.images.length === 0)) {
-      return { ...g, images: staticGame.images };
-    }
-    return g;
-  });
+  const games = data?.games?.length ? data.games : GAMES;
 
   return (
     // Page bg is always dark (cinematic game carousel look). Text must be

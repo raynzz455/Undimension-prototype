@@ -629,11 +629,10 @@ function MemberPortfolio({ member }: { member: Member }) {
 export function PortfolioPage() {
   // Fetch members from API (DB-backed) with static fallback
   const { data: membersData } = useFetch<{ members: Member[] }>("/api/members");
-  // Hidden members (Nayla) show ONLY when shuffle (chaos) is currently ON.
-  // Toggling shuffle OFF hides Nayla. Shuffle persists via localStorage.
-  const { chaos } = useChaos();
+  // Nayla shows when naylaRevealed is true (5-min session after shuffle ON).
+  const { naylaRevealed } = useChaos();
   const allMembers = membersData?.members ?? MEMBERS;
-  const members = allMembers.filter((m) => !m.hidden || chaos);
+  const members = allMembers.filter((m) => !m.hidden || naylaRevealed);
   const [selectedId, setSelectedId] = useState("aldi");
   useScrollReveal();
 

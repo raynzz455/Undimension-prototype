@@ -96,9 +96,10 @@ export function StatsRadarSection() {
   // Fetch members from API (DB-backed) with static fallback.
   // This ensures the radar chart reflects updates made via chaos-mode.
   const { data: membersData } = useFetch<{ members: Member[] }>("/api/members");
-  const { naylaRevealed } = useChaos();
+  // Hidden members (Nayla) show ONLY when shuffle (chaos) is currently ON.
+  const { chaos } = useChaos();
   const allMembers = membersData?.members ?? MEMBERS;
-  const members = allMembers.filter((m) => !m.hidden || naylaRevealed);
+  const members = allMembers.filter((m) => !m.hidden || chaos);
 
   // Default: show 3 members to avoid clutter, user can toggle others
   const [activeIds, setActiveIds] = useState<Set<string>>(

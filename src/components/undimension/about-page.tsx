@@ -395,11 +395,13 @@ function HarapanSection() {
 export function AboutPage() {
   // Fetch members from API (DB-backed) with static fallback
   const { data: membersData } = useFetch<{ members: Member[] }>("/api/members");
-  // Hidden members (like Nayla) only show when the user has toggled the
-  // navbar shuffle (chaos) at least once in this session. NOT godMode/Konami.
-  const { naylaRevealed } = useChaos();
+  // Hidden members (Nayla) show ONLY when shuffle (chaos) is currently ON.
+  // Toggling shuffle OFF hides Nayla again. The shuffle state persists via
+  // localStorage (ud-chaos) so it survives refresh — but Nayla follows the
+  // current toggle state, not an "ever revealed" flag.
+  const { chaos } = useChaos();
   const allMembers = membersData?.members ?? MEMBERS;
-  const members = allMembers.filter((m) => !m.hidden || naylaRevealed);
+  const members = allMembers.filter((m) => !m.hidden || chaos);
 
   const [selected, setSelected] = useState<Member | null>(null);
   const lastOpenedIdRef = useRef<string | null>(null);
